@@ -1,0 +1,20 @@
+[package]
+name = "tadak"
+version = "0.1.0"
+edition = "2021"
+description = "A distraction-free terminal writing app with big pixel fonts, a mechanical-typewriter feel, and live Hangul (Korean) jamo-by-jamo composition."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["terminal", "writing", "hangul", "korean", "tui"]
+categories = ["command-line-utilities", "text-editors"]
+
+[[bin]]
+name = "tadak"
+path = "src/main.rs"
+
+[dependencies]
+crossterm = "0.28"
+
+[profile.release]
+opt-level = 3
+lto = true
