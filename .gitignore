@@ -1,4 +1,5 @@
 /target
+/.omx/
 **/*.rs.bk
 *.swp
 untitled.txt
