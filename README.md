@@ -22,12 +22,14 @@ writing practice, screencasts, or just enjoying the act of typing.
 
 ## Features
 
-- **Big pixel font zone** — the character (or the jamo you're composing) is drawn
-  large with block pixels, scalable live.
+- **Big pixel font zone** — a short cursor-side phrase is drawn with
+  [Galmuri9](https://quiple.dev/font/galmuri) pixels, including complete Hangul
+  and distinct Latin uppercase/lowercase glyphs.
 - **Live Hangul jamo-by-jamo composition** — lead consonant → vowel → tail
   consonant appear step by step, including complex vowels (ㅘ, ㅢ …), double
   tails (ㄳ, ㄺ …), and the ghost rule (닭 + ㅏ → 달가).
-- **Mechanical feel** — a soft "clack" (terminal bell) on each keystroke.
+- **Mechanical feel** — a short, built-in mechanical typewriter impact and
+  key-return sound on each keystroke, played without blocking input.
 - **Focus mode** — hides all chrome so only your words remain.
 - **Themes** — `paper`, `night`, `amber`.
 - **Save & autosave** — plain `.txt`, with time-based autosave.
@@ -49,7 +51,7 @@ cargo run --release -- note.txt  # open (or create on save) a file
 | `F2` | toggle 한글 / English input |
 | `F3` | toggle focus mode |
 | `F4` | toggle the big-font zone |
-| `F5` | toggle keystroke sound |
+| `F5` | toggle system-audio keystroke sound |
 | `F6` | cycle theme |
 | `F7` / `F8` | decrease / increase big-font size |
 | `Ctrl+S` | save |
@@ -88,7 +90,7 @@ src/
 │   └── events.rs  # key → Action mapping
 ├── editor/        # text buffer, cursor, composer integration, save
 ├── renderer/
-│   ├── font.rs    # 5x7 ASCII + 8x8 jamo bitmap font
+│   ├── font.rs    # embedded Galmuri9 ASCII + complete Hangul bitmap subset
 │   └── terminal.rs# ANSI painting + RAII terminal guard
 ├── ui/            # layout regions, themes, char widths
 └── config/        # settings load/save
@@ -96,10 +98,10 @@ src/
 
 ## v0.1 scope notes
 
-- The big-font Hangul view shows the composing **jamo left-to-right** (the
-  assembly), not a fully laid-out 2D syllable block. Composed jamo (ㅘ, ㄳ …)
-  fold to a base glyph for the big view.
-- Sound is the terminal bell; no audio files yet.
+- The big-font view follows up to 12 characters around the cursor and trims the
+  oldest characters to fit the current terminal width.
+- The built-in typewriter PCM is mixed through one persistent, low-latency
+  Rodio audio stream; no player process is started for individual keystrokes.
 
 ## License
 
@@ -114,3 +116,6 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this project by you, as defined in the Apache-2.0 license, shall
 be dual licensed as above, without any additional terms or conditions.
+
+The embedded Galmuri9 font subset is separately licensed under the SIL Open Font
+License 1.1. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
