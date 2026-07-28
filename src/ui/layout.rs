@@ -29,12 +29,12 @@ impl Layout {
         let mut big_height = 0u16;
         if cfg.big_font {
             let px_h = cfg.font_size;
-            // 8 rows of pixels (jamo cell) plus a little padding.
-            let desired = 8 * px_h + 2;
+            // Galmuri's 10 bitmap rows are packed two per terminal row.
+            let desired = 5 * px_h + 2;
             let cap = avail / 2;
             let h = desired.min(cap);
             // Only show it if it fits without starving the document.
-            if h >= 6 && avail.saturating_sub(h) >= 3 {
+            if h >= 5 && avail.saturating_sub(h) >= 3 {
                 big_enabled = true;
                 big_height = h;
             }
@@ -53,5 +53,35 @@ impl Layout {
             doc_height,
             status_row,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normal_layout_reserves_status_and_document_space() {
+        let cfg = Config::default();
+        let layout = Layout::compute(80, 24, &cfg);
+
+        assert_eq!(layout.cols, 80);
+        assert_eq!(layout.status_row, Some(23));
+        assert!(layout.big_enabled);
+        assert!(layout.doc_height >= 3);
+        assert_eq!(layout.big_height + layout.doc_height, 23);
+    }
+
+    #[test]
+    fn compact_or_focus_layout_degrades_safely() {
+        let mut cfg = Config::default();
+        let compact = Layout::compute(20, 4, &cfg);
+        assert!(!compact.big_enabled);
+        assert_eq!(compact.doc_height, 3);
+
+        cfg.focus_mode = true;
+        let focused = Layout::compute(20, 4, &cfg);
+        assert_eq!(focused.status_row, None);
+        assert_eq!(focused.doc_height, 4);
     }
 }

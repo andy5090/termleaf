@@ -1,12 +1,31 @@
-//! A tiny built-in bitmap font used to draw enlarged ("big pixel") glyphs.
+//! Galmuri9-backed bitmap glyphs for the enlarged focus zone.
 //!
-//! ASCII characters use a 5x7 cell; Hangul jamo use an 8x8 cell. Everything
-//! else (and composed jamo we don't have art for) falls back to a base jamo or
-//! an outlined box. The shapes are deliberately stylized pixel art, not a
-//! typographically faithful font.
+//! Tadak embeds a converted subset of Galmuri9 2.40.4 containing printable
+//! ASCII, Hangul Compatibility Jamo, and all 11,172 precomposed Hangul
+//! syllables. Glyphs share a 10-row baseline-aware canvas while retaining
+//! their original advance widths.
+//!
+//! The subset is licensed under the SIL Open Font License 1.1; see
+//! `THIRD_PARTY_LICENSES.md` and `assets/OFL-1.1.txt`.
 
-/// A monochrome bitmap glyph. `rows[y]` holds one row; bit `width-1` is the
-/// leftmost pixel.
+const FONT_DATA: &[u8] = include_bytes!("../../assets/galmuri9-2.40.4-tadak.bin");
+const ROWS_PER_GLYPH: usize = 10;
+const BYTES_PER_GLYPH: usize = 1 + ROWS_PER_GLYPH * 2;
+
+const ASCII_START: u32 = 0x0020;
+const ASCII_END: u32 = 0x007E;
+const JAMO_START: u32 = 0x3131;
+const JAMO_END: u32 = 0x3163;
+const HANGUL_START: u32 = 0xAC00;
+const HANGUL_END: u32 = 0xD7A3;
+
+const ASCII_COUNT: usize = (ASCII_END - ASCII_START + 1) as usize;
+const JAMO_COUNT: usize = (JAMO_END - JAMO_START + 1) as usize;
+const HANGUL_COUNT: usize = (HANGUL_END - HANGUL_START + 1) as usize;
+const GLYPH_COUNT: usize = ASCII_COUNT + JAMO_COUNT + HANGUL_COUNT;
+
+/// A monochrome bitmap glyph. `rows[y]` stores one row; bit `width - 1` is
+/// the leftmost pixel.
 #[derive(Debug, Clone)]
 pub struct Glyph {
     pub width: usize,
@@ -15,23 +34,7 @@ pub struct Glyph {
 }
 
 impl Glyph {
-    fn from5(rows: [u8; 7]) -> Glyph {
-        Glyph {
-            width: 5,
-            height: 7,
-            rows: rows.iter().map(|&b| b as u16).collect(),
-        }
-    }
-
-    fn from8(rows: [u8; 8]) -> Glyph {
-        Glyph {
-            width: 8,
-            height: 8,
-            rows: rows.iter().map(|&b| b as u16).collect(),
-        }
-    }
-
-    /// Is the pixel at (x, y) lit?
+    /// Whether the pixel at `(x, y)` is lit.
     pub fn lit(&self, x: usize, y: usize) -> bool {
         if y >= self.height || x >= self.width {
             return false;
@@ -40,130 +43,47 @@ impl Glyph {
     }
 }
 
-/// Look up the glyph for a character, applying case- and jamo-folding and
-/// falling back to an outlined box for anything unknown.
+/// Look up a glyph, falling back to an outlined replacement box for code
+/// points outside Tadak's embedded subset.
 pub fn glyph_for(c: char) -> Glyph {
-    if let Some(rows) = ascii_rows(c.to_ascii_uppercase()) {
-        return Glyph::from5(rows);
-    }
-    let base = jamo_base(c);
-    if let Some(rows) = jamo_rows(base) {
-        return Glyph::from8(rows);
-    }
-    // fallback: outlined box
-    Glyph::from5([
-        0b11111, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11111,
-    ])
+    glyph_index(c)
+        .map(decode_glyph)
+        .unwrap_or_else(fallback_glyph)
 }
 
-/// Fold composed jamo down to a base shape we have art for.
-fn jamo_base(c: char) -> char {
-    match c {
-        'ㄲ' => 'ㄱ',
-        'ㄸ' => 'ㄷ',
-        'ㅃ' => 'ㅂ',
-        'ㅆ' => 'ㅅ',
-        'ㅉ' => 'ㅈ',
-        'ㅒ' => 'ㅐ',
-        'ㅖ' => 'ㅔ',
-        'ㅘ' | 'ㅙ' | 'ㅚ' => 'ㅗ',
-        'ㅝ' | 'ㅞ' | 'ㅟ' => 'ㅜ',
-        'ㅢ' => 'ㅡ',
-        'ㄳ' => 'ㄱ',
-        'ㄵ' | 'ㄶ' => 'ㄴ',
-        'ㄺ' | 'ㄻ' | 'ㄼ' | 'ㄽ' | 'ㄾ' | 'ㄿ' | 'ㅀ' => 'ㄹ',
-        'ㅄ' => 'ㅂ',
-        other => other,
+fn glyph_index(c: char) -> Option<usize> {
+    let codepoint = c as u32;
+    match codepoint {
+        ASCII_START..=ASCII_END => Some((codepoint - ASCII_START) as usize),
+        JAMO_START..=JAMO_END => Some(ASCII_COUNT + (codepoint - JAMO_START) as usize),
+        HANGUL_START..=HANGUL_END => {
+            Some(ASCII_COUNT + JAMO_COUNT + (codepoint - HANGUL_START) as usize)
+        }
+        _ => None,
     }
 }
 
-#[rustfmt::skip]
-fn ascii_rows(c: char) -> Option<[u8; 7]> {
-    let g = match c {
-        ' ' => [0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000],
-        'A' => [0b01110,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
-        'B' => [0b11110,0b10001,0b11110,0b10001,0b10001,0b10001,0b11110],
-        'C' => [0b01110,0b10001,0b10000,0b10000,0b10000,0b10001,0b01110],
-        'D' => [0b11100,0b10010,0b10001,0b10001,0b10001,0b10010,0b11100],
-        'E' => [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b11111],
-        'F' => [0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b10000],
-        'G' => [0b01110,0b10001,0b10000,0b10111,0b10001,0b10001,0b01111],
-        'H' => [0b10001,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
-        'I' => [0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b11111],
-        'J' => [0b00111,0b00010,0b00010,0b00010,0b10010,0b10010,0b01100],
-        'K' => [0b10001,0b10010,0b10100,0b11000,0b10100,0b10010,0b10001],
-        'L' => [0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b11111],
-        'M' => [0b10001,0b11011,0b10101,0b10101,0b10001,0b10001,0b10001],
-        'N' => [0b10001,0b11001,0b10101,0b10011,0b10001,0b10001,0b10001],
-        'O' => [0b01110,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
-        'P' => [0b11110,0b10001,0b10001,0b11110,0b10000,0b10000,0b10000],
-        'Q' => [0b01110,0b10001,0b10001,0b10001,0b10101,0b10010,0b01101],
-        'R' => [0b11110,0b10001,0b10001,0b11110,0b10100,0b10010,0b10001],
-        'S' => [0b01111,0b10000,0b10000,0b01110,0b00001,0b00001,0b11110],
-        'T' => [0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100],
-        'U' => [0b10001,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
-        'V' => [0b10001,0b10001,0b10001,0b10001,0b10001,0b01010,0b00100],
-        'W' => [0b10001,0b10001,0b10001,0b10101,0b10101,0b11011,0b10001],
-        'X' => [0b10001,0b10001,0b01010,0b00100,0b01010,0b10001,0b10001],
-        'Y' => [0b10001,0b10001,0b01010,0b00100,0b00100,0b00100,0b00100],
-        'Z' => [0b11111,0b00001,0b00010,0b00100,0b01000,0b10000,0b11111],
-        '0' => [0b01110,0b10001,0b10011,0b10101,0b11001,0b10001,0b01110],
-        '1' => [0b00100,0b01100,0b00100,0b00100,0b00100,0b00100,0b01110],
-        '2' => [0b01110,0b10001,0b00001,0b00110,0b01000,0b10000,0b11111],
-        '3' => [0b11111,0b00010,0b00100,0b00010,0b00001,0b10001,0b01110],
-        '4' => [0b00010,0b00110,0b01010,0b10010,0b11111,0b00010,0b00010],
-        '5' => [0b11111,0b10000,0b11110,0b00001,0b00001,0b10001,0b01110],
-        '6' => [0b00110,0b01000,0b10000,0b11110,0b10001,0b10001,0b01110],
-        '7' => [0b11111,0b00001,0b00010,0b00100,0b01000,0b01000,0b01000],
-        '8' => [0b01110,0b10001,0b10001,0b01110,0b10001,0b10001,0b01110],
-        '9' => [0b01110,0b10001,0b10001,0b01111,0b00001,0b00010,0b01100],
-        '.' => [0b00000,0b00000,0b00000,0b00000,0b00000,0b00110,0b00110],
-        ',' => [0b00000,0b00000,0b00000,0b00000,0b00110,0b00100,0b01000],
-        '!' => [0b00100,0b00100,0b00100,0b00100,0b00100,0b00000,0b00100],
-        '?' => [0b01110,0b10001,0b00001,0b00110,0b00100,0b00000,0b00100],
-        '\'' => [0b00100,0b00100,0b01000,0b00000,0b00000,0b00000,0b00000],
-        '-' => [0b00000,0b00000,0b00000,0b11111,0b00000,0b00000,0b00000],
-        ':' => [0b00000,0b00110,0b00110,0b00000,0b00110,0b00110,0b00000],
-        ';' => [0b00000,0b00110,0b00110,0b00000,0b00110,0b00100,0b01000],
-        _ => return None,
-    };
-    Some(g)
+fn decode_glyph(index: usize) -> Glyph {
+    debug_assert_eq!(FONT_DATA.len(), GLYPH_COUNT * BYTES_PER_GLYPH);
+    let start = index * BYTES_PER_GLYPH;
+    let width = FONT_DATA[start] as usize;
+    let rows = FONT_DATA[start + 1..start + BYTES_PER_GLYPH]
+        .chunks_exact(2)
+        .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
+        .collect();
+    Glyph {
+        width,
+        height: ROWS_PER_GLYPH,
+        rows,
+    }
 }
 
-#[rustfmt::skip]
-fn jamo_rows(c: char) -> Option<[u8; 8]> {
-    let g = match c {
-        // consonants
-        'ㄱ' => [0b11111110,0b00000010,0b00000010,0b00000100,0b00001000,0b00010000,0b00100000,0b00000000],
-        'ㄴ' => [0b01000000,0b01000000,0b01000000,0b01000000,0b01000000,0b01000000,0b01111110,0b00000000],
-        'ㄷ' => [0b11111110,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b11111110,0b00000000],
-        'ㄹ' => [0b11111110,0b00000010,0b00000010,0b11111110,0b10000000,0b10000000,0b11111110,0b00000000],
-        'ㅁ' => [0b11111110,0b10000010,0b10000010,0b10000010,0b10000010,0b10000010,0b11111110,0b00000000],
-        'ㅂ' => [0b10000010,0b10000010,0b10000010,0b11111110,0b10000010,0b10000010,0b11111110,0b00000000],
-        'ㅅ' => [0b00010000,0b00010000,0b00101000,0b00101000,0b01000100,0b01000100,0b10000010,0b00000000],
-        'ㅇ' => [0b00111000,0b01000100,0b10000010,0b10000010,0b10000010,0b01000100,0b00111000,0b00000000],
-        'ㅈ' => [0b11111110,0b00010000,0b00101000,0b00101000,0b01000100,0b01000100,0b10000010,0b00000000],
-        'ㅊ' => [0b00010000,0b11111110,0b00010000,0b00101000,0b01000100,0b01000100,0b10000010,0b00000000],
-        'ㅋ' => [0b11111110,0b00000010,0b00111110,0b00000010,0b00000100,0b00001000,0b00010000,0b00000000],
-        'ㅌ' => [0b11111110,0b10000000,0b11111110,0b10000000,0b10000000,0b10000000,0b11111110,0b00000000],
-        'ㅍ' => [0b11111110,0b00101000,0b00101000,0b00101000,0b00101000,0b00101000,0b11111110,0b00000000],
-        'ㅎ' => [0b00010000,0b11111110,0b00000000,0b00111000,0b01000100,0b01000100,0b00111000,0b00000000],
-        // vowels
-        'ㅏ' => [0b00001000,0b00001000,0b00001000,0b00001110,0b00001000,0b00001000,0b00001000,0b00000000],
-        'ㅑ' => [0b00001000,0b00001000,0b00001110,0b00001000,0b00001110,0b00001000,0b00001000,0b00000000],
-        'ㅓ' => [0b00001000,0b00001000,0b00001000,0b01111000,0b00001000,0b00001000,0b00001000,0b00000000],
-        'ㅕ' => [0b00001000,0b00001000,0b01111000,0b00001000,0b01111000,0b00001000,0b00001000,0b00000000],
-        'ㅗ' => [0b00010000,0b00010000,0b00010000,0b11111111,0b00000000,0b00000000,0b00000000,0b00000000],
-        'ㅛ' => [0b00101000,0b00101000,0b00101000,0b11111111,0b00000000,0b00000000,0b00000000,0b00000000],
-        'ㅜ' => [0b00000000,0b00000000,0b00000000,0b11111111,0b00010000,0b00010000,0b00010000,0b00000000],
-        'ㅠ' => [0b00000000,0b00000000,0b00000000,0b11111111,0b00101000,0b00101000,0b00101000,0b00000000],
-        'ㅡ' => [0b00000000,0b00000000,0b00000000,0b11111111,0b00000000,0b00000000,0b00000000,0b00000000],
-        'ㅣ' => [0b00001000,0b00001000,0b00001000,0b00001000,0b00001000,0b00001000,0b00001000,0b00000000],
-        'ㅐ' => [0b00100100,0b00100100,0b00100100,0b00111100,0b00100100,0b00100100,0b00100100,0b00000000],
-        'ㅔ' => [0b00100100,0b00100100,0b00100100,0b01111100,0b00100100,0b00100100,0b00100100,0b00000000],
-        _ => return None,
-    };
-    Some(g)
+fn fallback_glyph() -> Glyph {
+    Glyph {
+        width: 8,
+        height: 10,
+        rows: vec![0xFF, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81, 0x81, 0xFF],
+    }
 }
 
 #[cfg(test)]
@@ -171,25 +91,67 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ascii_lookup_folds_case() {
+    fn embedded_subset_has_the_expected_shape() {
+        assert_eq!(GLYPH_COUNT, 11_318);
+        assert_eq!(FONT_DATA.len(), GLYPH_COUNT * BYTES_PER_GLYPH);
+    }
+
+    #[test]
+    fn ascii_preserves_letter_case() {
         let upper = glyph_for('A');
         let lower = glyph_for('a');
-        assert_eq!(upper.rows, lower.rows);
-        assert_eq!(upper.width, 5);
+        assert_eq!(upper.height, 10);
+        assert_eq!(lower.height, 10);
+        assert_ne!(upper.rows, lower.rows);
     }
 
     #[test]
-    fn jamo_lookup_and_folding() {
-        let g = glyph_for('ㅎ');
-        assert_eq!(g.width, 8);
-        // composed vowel folds to a base we have art for
-        assert_eq!(glyph_for('ㅘ').rows, glyph_for('ㅗ').rows);
+    fn completed_hangul_comes_from_distinct_full_size_glyphs() {
+        let han = glyph_for('한');
+        let geul = glyph_for('글');
+        let ga = glyph_for('가');
+        let kka = glyph_for('까');
+
+        for glyph in [&han, &geul, &ga, &kka] {
+            assert_eq!((glyph.width, glyph.height), (10, 10));
+            assert!(glyph.rows.iter().any(|&row| row != 0));
+        }
+        assert_ne!(han.rows, geul.rows);
+        assert_ne!(ga.rows, kka.rows);
     }
 
     #[test]
-    fn unknown_falls_back_to_box() {
-        let g = glyph_for('§');
-        assert_eq!(g.width, 5);
-        assert!(g.lit(0, 0)); // box corner lit
+    fn every_modern_hangul_syllable_is_present() {
+        for codepoint in HANGUL_START..=HANGUL_END {
+            let character = char::from_u32(codepoint).expect("Hangul code point should be valid");
+            let glyph = glyph_for(character);
+            assert_eq!(glyph.width, 10, "unexpected width for U+{codepoint:04X}");
+            assert!(
+                glyph.rows.iter().any(|&row| row != 0),
+                "empty glyph for U+{codepoint:04X}"
+            );
+        }
+    }
+
+    #[test]
+    fn latin_descenders_reach_the_shared_bottom_row() {
+        for character in ['g', 'j', 'p', 'q', 'y'] {
+            assert_ne!(
+                glyph_for(character).rows[9],
+                0,
+                "{character} should retain its descender"
+            );
+        }
+    }
+
+    #[test]
+    fn whitespace_is_blank_and_unknown_characters_use_a_box() {
+        let space = glyph_for(' ');
+        assert!(space.rows.iter().all(|&row| row == 0));
+
+        let fallback = glyph_for('🦀');
+        assert_eq!((fallback.width, fallback.height), (8, 10));
+        assert!(fallback.lit(0, 0));
+        assert!(fallback.lit(7, 9));
     }
 }

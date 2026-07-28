@@ -233,24 +233,6 @@ impl Composer {
         n
     }
 
-    /// The jamo currently in the cluster, in reading order, as compatibility
-    /// jamo. Used by the big-font renderer to show assembly one piece at a time.
-    pub fn jamo_sequence(&self) -> Vec<char> {
-        let mut out = Vec::new();
-        if let Some(ci) = self.cho {
-            out.push(CHO[ci]);
-        }
-        if let Some(ji) = self.jung {
-            out.push(JUNG[ji]);
-        }
-        if self.jong != 0 {
-            if let Some(c) = JONG[self.jong] {
-                out.push(c);
-            }
-        }
-        out
-    }
-
     /// The current cluster rendered as a single (possibly partial) glyph.
     pub fn composing_string(&self) -> String {
         match (self.cho, self.jung) {
@@ -440,7 +422,6 @@ mod tests {
         c.input('ㄴ');
         assert_eq!(c.composing_string(), "한");
         assert_eq!(c.stage(), 3);
-        assert_eq!(c.jamo_sequence(), vec!['ㅎ', 'ㅏ', 'ㄴ']);
     }
 
     #[test]

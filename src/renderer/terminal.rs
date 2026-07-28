@@ -136,29 +136,33 @@ fn draw_big(
     theme: &Theme,
     layout: &Layout,
 ) -> io::Result<()> {
-    // Prefer the live composing cluster; otherwise show the last typed char.
-    let seq = editor.composer().jamo_sequence();
-    let chars: Vec<char> = if !seq.is_empty() {
-        seq
-    } else {
-        let cur = editor.cursor();
-        let lines = editor.lines();
-        if cur.col > 0 && cur.row < lines.len() {
-            vec![lines[cur.row][cur.col - 1]]
-        } else {
-            Vec::new()
-        }
-    };
+    // Follow a short slice of the active line, including live composition.
+    // This gives the focus zone enough context to read like a phrase while
+    // keeping the cursor-side text visible on narrow terminals.
+    let chars = editor.focus_text(12);
     if chars.is_empty() {
         return Ok(());
     }
 
-    let px_h = cfg.font_size.max(1);
-    let px_w = cfg.font_size.max(1) * 2;
-    let glyphs: Vec<Glyph> = chars.iter().map(|&c| glyph_for(c)).collect();
-    let gap = px_w;
+    let mut glyphs: Vec<Glyph> = chars.iter().map(|&c| glyph_for(c)).collect();
 
-    let widths_sum: u16 = glyphs.iter().map(|g| g.width as u16 * px_w).sum();
+    // At least one-cell pixels are required. If the whole phrase does not fit
+    // even then, discard its oldest characters until the cursor-side portion
+    // does. Otherwise choose the largest configured scale that fits both axes.
+    while glyphs.len() > 1 && unscaled_width(&glyphs) > layout.cols {
+        glyphs.remove(0);
+    }
+    let glyph_h_max = glyphs.iter().map(|g| g.height as u16).max().unwrap_or(10);
+    if layout.big_height * 2 < glyph_h_max || unscaled_width(&glyphs) > layout.cols {
+        return Ok(());
+    }
+    let scale_x = layout.cols / unscaled_width(&glyphs).max(1);
+    let scale_y = layout.big_height * 2 / glyph_h_max.max(1);
+    let scale = cfg.font_size.max(1).min(scale_x).min(scale_y).max(1);
+    let pixel_scale = scale;
+    let gap = scale;
+
+    let widths_sum: u16 = glyphs.iter().map(|g| g.width as u16 * pixel_scale).sum();
     let total = widths_sum + gap * (glyphs.len() as u16 - 1);
     let start_x = if total < layout.cols {
         (layout.cols - total) / 2
@@ -166,8 +170,7 @@ fn draw_big(
         0
     };
 
-    let glyph_h_max = glyphs.iter().map(|g| g.height as u16).max().unwrap_or(8);
-    let block_h = glyph_h_max * px_h;
+    let block_h = (glyph_h_max * pixel_scale).div_ceil(2);
     let start_y = layout.big_top
         + if layout.big_height > block_h {
             (layout.big_height - block_h) / 2
@@ -177,10 +180,16 @@ fn draw_big(
 
     let mut gx = start_x;
     for g in &glyphs {
-        draw_glyph(out, g, gx, start_y, px_w, px_h, theme)?;
-        gx += g.width as u16 * px_w + gap;
+        let glyph_y = start_y + ((glyph_h_max - g.height as u16) * pixel_scale).div_ceil(2);
+        draw_glyph(out, g, gx, glyph_y, pixel_scale, theme)?;
+        gx += g.width as u16 * pixel_scale + gap;
     }
     Ok(())
+}
+
+fn unscaled_width(glyphs: &[Glyph]) -> u16 {
+    let glyph_width: u16 = glyphs.iter().map(|g| g.width as u16).sum();
+    glyph_width.saturating_add(glyphs.len().saturating_sub(1) as u16)
 }
 
 fn draw_glyph(
@@ -188,29 +197,38 @@ fn draw_glyph(
     g: &Glyph,
     ox: u16,
     oy: u16,
-    px_w: u16,
-    px_h: u16,
+    scale: u16,
     theme: &Theme,
 ) -> io::Result<()> {
-    let block: String = "█".repeat(px_w as usize);
-    for y in 0..g.height {
+    if g.rows.iter().all(|&row| row == 0) {
+        return Ok(());
+    }
+
+    // A terminal cell is roughly twice as tall as it is wide. Unicode half
+    // blocks preserve two vertical bitmap pixels per row, keeping Galmuri's
+    // original proportions while leaving room for a short phrase.
+    let expanded_height = g.height * scale as usize;
+    for expanded_y in (0..expanded_height).step_by(2) {
+        let top_y = expanded_y / scale as usize;
+        let bottom_y = (expanded_y + 1) / scale as usize;
+        let row = oy + expanded_y as u16 / 2;
         for x in 0..g.width {
-            // Lit pixels use the ink color; unlit pixels get a faint grid so
-            // the letter reads as a real pixel display.
-            let color = if g.lit(x, y) {
-                theme.pixel
-            } else {
-                theme.pixel_off
+            let top = g.lit(x, top_y);
+            let bottom = expanded_y + 1 < expanded_height && g.lit(x, bottom_y);
+            let (symbol, foreground, background) = match (top, bottom) {
+                (true, true) => ('█', theme.pixel, theme.bg),
+                (true, false) => ('▀', theme.pixel, theme.pixel_off),
+                (false, true) => ('▄', theme.pixel, theme.pixel_off),
+                (false, false) => ('█', theme.pixel_off, theme.bg),
             };
-            for r in 0..px_h {
-                queue!(
-                    out,
-                    cursor::MoveTo(ox + x as u16 * px_w, oy + y as u16 * px_h + r),
-                    SetForegroundColor(color),
-                    SetBackgroundColor(theme.bg),
-                    Print(&block)
-                )?;
-            }
+            let pixels: String = std::iter::repeat_n(symbol, scale as usize).collect();
+            queue!(
+                out,
+                cursor::MoveTo(ox + x as u16 * scale, row),
+                SetForegroundColor(foreground),
+                SetBackgroundColor(background),
+                Print(&pixels)
+            )?;
         }
     }
     Ok(())

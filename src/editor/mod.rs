@@ -70,6 +70,29 @@ impl Editor {
         &self.composer
     }
 
+    /// A short slice of the current line for the big-pixel focus zone.
+    ///
+    /// Pending Hangul composition is inserted at the cursor so the enlarged
+    /// view mirrors what the document will look like once it is committed.
+    /// When the line is longer than `max_chars`, the window follows the cursor
+    /// and favors the text immediately before it.
+    pub fn focus_text(&self, max_chars: usize) -> Vec<char> {
+        if max_chars == 0 {
+            return Vec::new();
+        }
+
+        let Cursor { row, col } = self.doc.cursor;
+        let mut line = self.buffer.lines.get(row).cloned().unwrap_or_default();
+        let composing: Vec<char> = self.composing().chars().collect();
+        let insert_at = col.min(line.len());
+        line.splice(insert_at..insert_at, composing.iter().copied());
+
+        let caret = insert_at + composing.len();
+        let start = caret.saturating_sub(max_chars);
+        let end = (start + max_chars).min(line.len());
+        line[start..end].to_vec()
+    }
+
     // --- editing ---------------------------------------------------------
 
     fn insert_committed(&mut self, c: char) {
@@ -225,5 +248,104 @@ impl Editor {
 
     pub fn char_count(&self) -> usize {
         self.buffer.char_count()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn edits_lines_and_moves_across_boundaries() {
+        let mut editor = Editor::new();
+        for c in "가ab".chars() {
+            editor.insert_char(c);
+        }
+        editor.move_left();
+        editor.newline();
+
+        assert_eq!(editor.buffer.to_text(), "가a\nb");
+        assert_eq!(editor.cursor(), Cursor { row: 1, col: 0 });
+
+        editor.backspace();
+        assert_eq!(editor.buffer.to_text(), "가ab");
+        assert_eq!(editor.cursor(), Cursor { row: 0, col: 2 });
+
+        editor.move_home();
+        editor.move_left();
+        assert_eq!(editor.cursor(), Cursor { row: 0, col: 0 });
+        editor.move_end();
+        editor.move_right();
+        assert_eq!(editor.cursor(), Cursor { row: 0, col: 3 });
+    }
+
+    #[test]
+    fn movement_clamps_to_the_target_line() {
+        let mut editor = Editor::new();
+        for c in "long".chars() {
+            editor.insert_char(c);
+        }
+        editor.newline();
+        editor.insert_char('x');
+        editor.move_up();
+        editor.move_end();
+        editor.move_down();
+        assert_eq!(editor.cursor(), Cursor { row: 1, col: 1 });
+    }
+
+    #[test]
+    fn composition_is_committed_before_literal_input() {
+        let mut editor = Editor::new();
+        for jamo in ['ㅎ', 'ㅏ', 'ㄴ'] {
+            editor.input_jamo(jamo);
+        }
+        assert_eq!(editor.composing(), "한");
+        assert_eq!(editor.buffer.to_text(), "");
+
+        editor.insert_char('!');
+        assert_eq!(editor.buffer.to_text(), "한!");
+        assert!(editor.composer.is_empty());
+        assert!(editor.doc.dirty);
+    }
+
+    #[test]
+    fn focus_text_follows_cursor_and_includes_pending_composition() {
+        let mut editor = Editor::new();
+        for c in "123456789".chars() {
+            editor.insert_char(c);
+        }
+        for jamo in ['ㅎ', 'ㅏ', 'ㄴ'] {
+            editor.input_jamo(jamo);
+        }
+
+        assert_eq!(editor.focus_text(6).iter().collect::<String>(), "56789한");
+
+        editor.move_left();
+        assert_eq!(editor.focus_text(4).iter().collect::<String>(), "6789");
+        assert!(editor.composer.is_empty());
+    }
+
+    #[test]
+    fn save_creates_parent_directories_and_clears_dirty_flag() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("tadak-test-{}-{unique}", std::process::id()));
+        let path = root.join("nested").join("note.txt");
+
+        let mut editor = Editor::open(&path).expect("a missing document should open empty");
+        editor.insert_char('한');
+        let saved = editor.save().expect("document should save");
+
+        assert_eq!(saved, path);
+        assert_eq!(
+            fs::read_to_string(&path).expect("saved file should exist"),
+            "한"
+        );
+        assert!(!editor.doc.dirty);
+
+        fs::remove_dir_all(root).expect("temporary test directory should be removable");
     }
 }
