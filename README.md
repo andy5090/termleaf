@@ -6,6 +6,9 @@ jamo assembling one piece at a time (예: `ㅎ` → `하` → `한`).
 
 The name comes from the Korean onomatopoeia *타닥타닥* — the clatter of keys.
 
+[![CI](https://github.com/andy5090/tadak/actions/workflows/ci.yml/badge.svg)](https://github.com/andy5090/tadak/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+
 > Status: v0.1 — a working foundation. Rendering is ANSI-only (via
 > [`crossterm`](https://crates.io/crates/crossterm)) so it runs on virtually any
 > terminal.
@@ -100,4 +103,14 @@ src/
 
 ## License
 
-MIT OR Apache-2.0.
+Licensed under either of
+
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
+  <http://www.apache.org/licenses/LICENSE-2.0>)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project by you, as defined in the Apache-2.0 license, shall
+be dual licensed as above, without any additional terms or conditions.
