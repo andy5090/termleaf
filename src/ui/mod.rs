@@ -28,3 +28,15 @@ pub fn char_width(c: char) -> u16 {
         1
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reports_terminal_cell_width_for_latin_and_hangul() {
+        assert_eq!(char_width('A'), 1);
+        assert_eq!(char_width('한'), 2);
+        assert_eq!(char_width('ㄱ'), 2);
+    }
+}

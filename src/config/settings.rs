@@ -139,3 +139,34 @@ fn parse_bool(value: &str, fallback: bool) -> bool {
         _ => fallback,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn boolean_parser_accepts_common_spellings_and_preserves_fallback() {
+        for value in ["true", "TRUE", "1", "on", "yes"] {
+            assert!(parse_bool(value, false));
+        }
+        for value in ["false", "FALSE", "0", "off", "no"] {
+            assert!(!parse_bool(value, true));
+        }
+        assert!(parse_bool("invalid", true));
+        assert!(!parse_bool("invalid", false));
+    }
+
+    #[test]
+    fn font_size_stays_within_supported_bounds() {
+        let mut cfg = Config {
+            font_size: MAX_FONT,
+            ..Config::default()
+        };
+        cfg.font_inc();
+        assert_eq!(cfg.font_size, MAX_FONT);
+
+        cfg.font_size = MIN_FONT;
+        cfg.font_dec();
+        assert_eq!(cfg.font_size, MIN_FONT);
+    }
+}

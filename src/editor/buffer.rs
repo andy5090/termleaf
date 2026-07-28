@@ -53,3 +53,25 @@ impl Buffer {
         self.lines.iter().map(|l| l.len()).sum()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_round_trip_preserves_empty_and_unicode_lines() {
+        for text in ["", "첫 줄\n\nlast\n"] {
+            let buffer = Buffer::from_str(text);
+            assert_eq!(buffer.to_text(), text);
+            assert!(!buffer.lines.is_empty());
+        }
+    }
+
+    #[test]
+    fn counts_characters_instead_of_utf8_bytes() {
+        let buffer = Buffer::from_str("한글\nabc");
+        assert_eq!(buffer.line_count(), 2);
+        assert_eq!(buffer.line_len(0), 2);
+        assert_eq!(buffer.char_count(), 5);
+    }
+}

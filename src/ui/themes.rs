@@ -124,3 +124,17 @@ impl Theme {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cycles_all_themes_and_falls_back_to_paper() {
+        assert_eq!(Theme::next("paper"), "night");
+        assert_eq!(Theme::next("night"), "amber");
+        assert_eq!(Theme::next("amber"), "paper");
+        assert_eq!(Theme::next("unknown"), "paper");
+        assert_eq!(Theme::by_name("unknown").fg, Theme::by_name("paper").fg);
+    }
+}

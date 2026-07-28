@@ -71,3 +71,40 @@ pub fn map_key(key: KeyEvent, hangul: bool) -> Action {
         _ => Action::Ignore,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_control_and_function_shortcuts() {
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL),
+                false
+            ),
+            Action::Save
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE), false),
+            Action::ToggleHangul
+        );
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+                false
+            ),
+            Action::Ignore
+        );
+    }
+
+    #[test]
+    fn maps_letters_to_jamo_only_in_hangul_mode() {
+        let key = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE);
+        assert_eq!(map_key(key, false), Action::InsertChar('g'));
+        assert_eq!(map_key(key, true), Action::Jamo('ㅎ'));
+
+        let punctuation = KeyEvent::new(KeyCode::Char('!'), KeyModifiers::SHIFT);
+        assert_eq!(map_key(punctuation, true), Action::InsertChar('!'));
+    }
+}
