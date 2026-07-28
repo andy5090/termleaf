@@ -243,6 +243,7 @@ fn draw_status(
     row: u16,
 ) -> io::Result<()> {
     let mode = if cfg.hangul_mode { "한" } else { "EN" };
+    let sound = if cfg.sound { "♪" } else { "무음" };
     let dirty = if editor.doc.dirty { "*" } else { "" };
     let name = editor
         .doc
@@ -253,12 +254,12 @@ fn draw_status(
         .unwrap_or_else(|| "untitled".to_string());
     let stage = editor.composer().stage();
     let left = format!(
-        " {mode} │ {dirty}{name} │ {}단어 {}자 │ 조합 {}/3 ",
+        " {mode} │ {sound} │ {dirty}{name} │ {}단어 {}자 │ 조합 {}/3 ",
         editor.word_count(),
         editor.char_count(),
         stage
     );
-    let hint = " F2 한/영  F3 집중  F4 큰글자  F7/8 크기  ^S 저장  ^Q 종료 ";
+    let hint = " F2 한/영  F3 집중  F4 큰글자  F5 소리  F7/8 크기  ^S 저장  ^Q 종료 ";
 
     let left_w: u16 = left.chars().map(char_width).sum();
     let hint_w: u16 = hint.chars().map(char_width).sum();

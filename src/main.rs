@@ -4,17 +4,19 @@
 //! composition. Rendering is ANSI-only (via crossterm) for broad terminal
 //! compatibility.
 
+mod audio;
 mod config;
 mod editor;
 mod input;
 mod renderer;
 mod ui;
 
-use std::io::{self, Write};
+use std::io;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyEventKind};
 
+use audio::SoundPlayer;
 use config::Config;
 use editor::Editor;
 use input::{map_key, Action};
@@ -35,6 +37,7 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     let mut theme = Theme::by_name(&cfg.theme);
     let mut last_autosave = Instant::now();
+    let sound = SoundPlayer::new();
 
     loop {
         draw(&mut stdout, &editor, &cfg, &theme)?;
@@ -48,7 +51,7 @@ fn main() -> io::Result<()> {
                     if matches!(action, Action::Quit) {
                         break;
                     }
-                    apply(&mut editor, &mut cfg, &mut theme, &mut stdout, action);
+                    apply(&mut editor, &mut cfg, &mut theme, &sound, action);
                 }
             }
         }
@@ -66,20 +69,26 @@ fn apply(
     editor: &mut Editor,
     cfg: &mut Config,
     theme: &mut Theme,
-    stdout: &mut io::Stdout,
+    sound: &SoundPlayer,
     action: Action,
 ) {
     match action {
         Action::InsertChar(c) => {
             editor.insert_char(c);
-            clack(stdout, cfg);
+            clack(sound, cfg);
         }
         Action::Jamo(j) => {
             editor.input_jamo(j);
-            clack(stdout, cfg);
+            clack(sound, cfg);
         }
-        Action::Backspace => editor.backspace(),
-        Action::Newline => editor.newline(),
+        Action::Backspace => {
+            editor.backspace();
+            clack(sound, cfg);
+        }
+        Action::Newline => {
+            editor.newline();
+            clack(sound, cfg);
+        }
         Action::Left => editor.move_left(),
         Action::Right => editor.move_right(),
         Action::Up => editor.move_up(),
@@ -92,7 +101,12 @@ fn apply(
         }
         Action::ToggleFocus => cfg.focus_mode = !cfg.focus_mode,
         Action::ToggleBigFont => cfg.big_font = !cfg.big_font,
-        Action::ToggleSound => cfg.sound = !cfg.sound,
+        Action::ToggleSound => {
+            cfg.sound = !cfg.sound;
+            if cfg.sound {
+                sound.play();
+            }
+        }
         Action::ToggleTheme => {
             cfg.theme = Theme::next(&cfg.theme).to_string();
             *theme = Theme::by_name(&cfg.theme);
@@ -106,11 +120,10 @@ fn apply(
     }
 }
 
-/// A soft mechanical "clack" — the terminal bell — on each keystroke.
-fn clack(stdout: &mut io::Stdout, cfg: &Config) {
+/// Queue a soft system sound without blocking input or rendering.
+fn clack(sound: &SoundPlayer, cfg: &Config) {
     if cfg.sound {
-        let _ = stdout.write_all(b"\x07");
-        let _ = stdout.flush();
+        sound.play();
     }
 }
 
