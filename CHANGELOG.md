@@ -7,6 +7,14 @@ and Tadak uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-30
+
+### Changed
+
+- Replaced the continuous synthetic carriage sweep with an acoustic sequence:
+  a short lever transient, a quiet travel gap, and a broadband stop that
+  excites a high margin bell.
+
 ## [0.1.1] - 2026-07-30
 
 ### Added
@@ -41,6 +49,7 @@ and Tadak uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/tadak/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/andy5090/tadak/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/andy5090/tadak/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/andy5090/tadak/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/andy5090/tadak/releases/tag/v0.1.0
