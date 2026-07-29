@@ -216,14 +216,14 @@ fn draw_sound_settings(
         [
             format!("[{}] 전체 소리 (F5)", enabled(cfg.sound)),
             format!("[{}] 삭제 소리", enabled(cfg.backspace_sound)),
-            format!("[{}] 캐리지 리턴 벨", enabled(cfg.return_sound)),
+            format!("[{}] 캐리지 리턴 소리", enabled(cfg.return_sound)),
             format!("[{}] 타자기 종류 (F11)", cfg.sound_profile),
         ]
     } else {
         [
             format!("[{}] Master sound (F5)", enabled(cfg.sound)),
             format!("[{}] Delete sound", enabled(cfg.backspace_sound)),
-            format!("[{}] Carriage-return bell", enabled(cfg.return_sound)),
+            format!("[{}] Carriage-return sound", enabled(cfg.return_sound)),
             format!("[{}] Key style (F11)", cfg.sound_profile),
         ]
     };

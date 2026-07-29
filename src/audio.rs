@@ -167,6 +167,10 @@ fn decode_pcm_wave(wav: &[u8]) -> Option<(u16, u32, Vec<f32>)> {
 mod tests {
     use super::*;
 
+    fn rms(samples: &[f32]) -> f32 {
+        (samples.iter().map(|sample| sample * sample).sum::<f32>() / samples.len() as f32).sqrt()
+    }
+
     #[test]
     fn embedded_typewriter_sound_is_valid_pcm() {
         for wav in [
@@ -203,6 +207,30 @@ mod tests {
         assert_ne!(
             &key[..key.len().min(1_000)],
             &backspace[..key.len().min(1_000)]
+        );
+    }
+
+    #[test]
+    fn carriage_return_contains_each_mechanical_stage() {
+        let (_, sample_rate, samples) =
+            decode_pcm_wave(RETURN_WAV).expect("return WAV should decode");
+        let section = |start: f32, end: f32| {
+            &samples[(start * sample_rate as f32) as usize..(end * sample_rate as f32) as usize]
+        };
+
+        assert!((0.5..=0.65).contains(&(samples.len() as f32 / sample_rate as f32)));
+        assert!(rms(section(0.0, 0.05)) > 0.12, "lever and bell should lead");
+        assert!(
+            rms(section(0.06, 0.30)) > 0.07,
+            "carriage rack should remain audible"
+        );
+        assert!(
+            rms(section(0.32, 0.40)) > 0.04,
+            "cabinet stop should be audible"
+        );
+        assert!(
+            rms(section(0.40, 0.54)) > 0.015,
+            "bell should decay naturally"
         );
     }
 
