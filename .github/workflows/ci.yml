@@ -26,6 +26,9 @@ jobs:
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Linux audio headers
+        run: sudo apt-get update && sudo apt-get install --yes libasound2-dev
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
