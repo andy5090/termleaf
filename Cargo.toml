@@ -3,6 +3,8 @@ name = "tadak"
 version = "0.1.0"
 edition = "2021"
 description = "A distraction-free terminal writing app with big pixel fonts, a mechanical-typewriter feel, and live Hangul (Korean) jamo-by-jamo composition."
+repository = "https://github.com/andy5090/tadak"
+homepage = "https://github.com/andy5090/tadak"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["terminal", "writing", "hangul", "korean", "tui"]
@@ -19,3 +21,9 @@ rodio = { version = "0.22.2", default-features = false, features = ["playback"] 
 [profile.release]
 opt-level = 3
 lto = true
+
+# Release archives are built through cargo-dist. Thin LTO keeps CI release
+# builds fast while retaining most of the optimization benefit.
+[profile.dist]
+inherits = "release"
+lto = "thin"
