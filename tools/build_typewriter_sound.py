@@ -193,96 +193,68 @@ def backspace_release() -> list[float]:
 
 
 def carriage_return() -> list[float]:
-    """A lever clack, margin bell, ratcheting carriage sweep, and end stop."""
-    duration = 0.56
+    """A lever touch, quiet carriage travel, stop clack, and high margin bell."""
+    duration = 0.48
     rng = random.Random(0xCA771A6E)
     samples: list[float] = []
     smoothed_noise = 0.0
-    ratchet_times: list[float] = []
-    ratchet_time = 0.067
-    ratchet_interval = 0.012
-    while ratchet_time < 0.305:
-        ratchet_times.append(ratchet_time)
-        # The rack slows slightly as the carriage reaches its stop.
-        ratchet_interval += 0.00055
-        ratchet_time += ratchet_interval
+    rack_times = [0.058, 0.087, 0.119, 0.154, 0.183]
 
     for index in range(round(SAMPLE_RATE * duration)):
         t = index / SAMPLE_RATE
         noise = rng.uniform(-1.0, 1.0)
-        smoothed_noise = smoothed_noise * 0.82 + noise * 0.18
+        smoothed_noise = smoothed_noise * 0.78 + noise * 0.22
 
-        # A return begins with the lever and line-feed pawl engaging. Keeping
-        # this very short prevents it from reading as a second key strike.
-        lever = burst(t, 0.0, 0.008, smoothed_noise * 0.5, 0.25, (185.0, 620.0))
-        feed_pawl = burst(
-            t, 0.027, 0.0055, smoothed_noise * 0.28, 0.14, (410.0, 930.0)
-        )
+        # The reference recording is transient-first: a short lever contact,
+        # followed by a mostly quiet mechanical travel interval. Avoiding a
+        # sustained low tone keeps this from sounding electronically looped.
+        lever = burst(t, 0.0, 0.006, noise * 0.34, 0.13, (290.0, 880.0))
+        lever_body = 0.08 * math.sin(math.tau * 170.0 * t) * math.exp(-t / 0.018)
 
-        # Real bells are inharmonic. The old exact 1x/2x/3x stack sounded like
-        # an electronic chime, so these partials ring at independent ratios.
-        bell_age = t - 0.014
-        if bell_age >= 0.0:
-            bell_attack = 1.0 - math.exp(-bell_age / 0.00065)
-            bell = bell_attack * (
-                0.52
-                * math.sin(math.tau * 1_510 * bell_age)
-                * math.exp(-bell_age / 0.25)
-                + 0.23
-                * math.sin(math.tau * 2_093 * bell_age + 0.3)
-                * math.exp(-bell_age / 0.17)
-                + 0.11
-                * math.sin(math.tau * 3_427 * bell_age + 0.8)
-                * math.exp(-bell_age / 0.09)
-            )
+        if 0.035 <= t < 0.205:
+            travel_age = t - 0.035
+            travel = (
+                smoothed_noise * 0.018
+                + 0.009 * math.sin(math.tau * 71.0 * travel_age)
+            ) * math.sin(math.pi * travel_age / 0.17)
         else:
-            bell = 0.0
+            travel = 0.0
 
-        travel_start = 0.052
-        travel_end = 0.325
-        travel_age = t - travel_start
-        if travel_start <= t < travel_end:
-            progress = travel_age / (travel_end - travel_start)
-            travel_envelope = math.sin(math.pi * progress) ** 0.65
-            slide = travel_envelope * (
-                smoothed_noise * 0.095
-                + 0.035
-                * math.sin(math.tau * (58.0 * travel_age + 13.0 * travel_age**2))
-            )
-        else:
-            slide = 0.0
-
-        # Closely-spaced rack clicks turn the slide into a recognizable
-        # carriage return instead of a featureless burst of noise.
-        ratchet = 0.0
-        for click_time in ratchet_times:
+        rack = 0.0
+        for click_time in rack_times:
             click_age = t - click_time
-            if 0.0 <= click_age < 0.009:
-                click_envelope = math.exp(-click_age / 0.0022)
-                ratchet += click_envelope * (
-                    smoothed_noise * 0.19
-                    + 0.075 * math.sin(math.tau * 760.0 * click_age)
-                    + 0.035 * math.sin(math.tau * 1_260.0 * click_age)
+            if 0.0 <= click_age < 0.006:
+                rack += math.exp(-click_age / 0.0015) * (
+                    noise * 0.055
+                    + 0.025 * math.sin(math.tau * 980.0 * click_age)
                 )
 
-        # The stop is a damped cabinet thump, not a bright metal impact.
-        stop = burst(
-            t, 0.326, 0.022, smoothed_noise * 0.34, 0.2, (92.0, 235.0)
-        )
-        cabinet_age = t - 0.326
-        cabinet = (
-            (
-                0.2 * math.sin(math.tau * 74.0 * cabinet_age)
-                + 0.08 * math.sin(math.tau * 148.0 * cabinet_age)
+        # The real acoustic signature arrives at the end of travel: one broad
+        # stop transient excites a small, high bell. Sparse inharmonic partials
+        # resemble metal without turning into a clean electronic chord.
+        stop = burst(t, 0.213, 0.012, noise * 0.5, 0.16, (240.0, 1_180.0))
+        bell_age = t - 0.222
+        if bell_age >= 0.0:
+            bell_attack = 1.0 - math.exp(-bell_age / 0.00045)
+            bell = bell_attack * (
+                0.5
+                * math.sin(math.tau * 2_620.0 * bell_age)
+                * math.exp(-bell_age / 0.16)
+                + 0.14
+                * math.sin(math.tau * 5_730.0 * bell_age + 0.45)
+                * math.exp(-bell_age / 0.075)
+                + 0.055
+                * math.sin(math.tau * 10_180.0 * bell_age + 1.1)
+                * math.exp(-bell_age / 0.038)
             )
-            * math.exp(-cabinet_age / 0.055)
-            if cabinet_age >= 0.0
-            else 0.0
-        )
+            bell_strike = noise * 0.22 * math.exp(-bell_age / 0.006)
+        else:
+            bell = 0.0
+            bell_strike = 0.0
 
-        sample = lever + feed_pawl + bell + slide + ratchet + stop + cabinet
-        if t > duration - 0.035:
-            sample *= (duration - t) / 0.035
+        sample = lever + lever_body + travel + rack + stop + bell_strike + bell
+        if t > duration - 0.025:
+            sample *= (duration - t) / 0.025
         samples.append(sample)
     return samples
 
@@ -292,7 +264,7 @@ def main() -> None:
     write_wave("typewriter-key-deep.wav", deep_strike())
     write_wave("typewriter-key-soft.wav", soft_strike(), peak_level=0.72)
     write_wave("typewriter-backspace.wav", backspace_release(), peak_level=0.32)
-    write_wave("typewriter-return.wav", carriage_return(), peak_level=0.62)
+    write_wave("typewriter-return.wav", carriage_return(), peak_level=0.58)
 
 
 if __name__ == "__main__":

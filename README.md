@@ -31,9 +31,9 @@ in the big-pixel focus zone.
   rule (닭 + ㅏ → 달가).
 - **Mechanical feel** — choose `classic`, `deep`, or `soft` built-in typewriter
   strikes; deletion uses a short, gentle, rate-limited release, while Enter
-  plays a lever clack, margin bell, ratcheting carriage sweep, and damped stop.
-  Master, deletion, and return effects can be controlled independently without
-  blocking input.
+  plays a brief lever contact followed by the carriage stop and a high margin
+  bell. Master, deletion, and return effects can be controlled independently
+  without blocking input.
 - **Open and save in-app** — choose a filename on first save, reopen another
   document, or save under a new name without leaving Tadak.
 - **Focus mode** — hides all chrome so only your words remain.

@@ -218,18 +218,21 @@ mod tests {
             &samples[(start * sample_rate as f32) as usize..(end * sample_rate as f32) as usize]
         };
 
-        assert!((0.5..=0.65).contains(&(samples.len() as f32 / sample_rate as f32)));
-        assert!(rms(section(0.0, 0.05)) > 0.12, "lever and bell should lead");
+        assert!((0.42..=0.55).contains(&(samples.len() as f32 / sample_rate as f32)));
+        let lever = rms(section(0.0, 0.04));
+        let quiet_travel = rms(section(0.08, 0.18));
+        let stop_and_bell = rms(section(0.21, 0.31));
+        assert!(lever > 0.025, "lever contact should lead");
         assert!(
-            rms(section(0.06, 0.30)) > 0.07,
-            "carriage rack should remain audible"
+            quiet_travel < stop_and_bell * 0.35,
+            "travel should leave space before the final strike"
         );
         assert!(
-            rms(section(0.32, 0.40)) > 0.04,
-            "cabinet stop should be audible"
+            stop_and_bell > 0.08,
+            "stop and high bell should be the main event"
         );
         assert!(
-            rms(section(0.40, 0.54)) > 0.015,
+            rms(section(0.32, 0.45)) > 0.01,
             "bell should decay naturally"
         );
     }
