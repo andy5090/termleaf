@@ -12,7 +12,7 @@ targets = [
 ]
 install-path = "CARGO_HOME"
 hosting = "github"
-install-updater = false
+install-updater = true
 
 [dist.dependencies.apt]
 libasound2-dev = "*"

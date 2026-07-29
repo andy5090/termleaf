@@ -72,6 +72,39 @@ Prebuilt archives and checksums are also available from the
 [latest GitHub release](https://github.com/andy5090/tadak/releases/latest).
 Release history is maintained in the [changelog](CHANGELOG.md).
 
+### Update or uninstall
+
+Existing curl installations can always be updated by running the installation
+command again. Releases after `v0.1.0` also install a small updater:
+
+```bash
+tadak-update
+```
+
+To uninstall a curl installation, first print the exact installed paths:
+
+```bash
+command -v tadak
+command -v tadak-update
+```
+
+Remove only the files printed by those commands. The default paths are
+`$HOME/.cargo/bin/tadak` and `$HOME/.cargo/bin/tadak-update`. Keep Cargo's
+shared `env`/`env.fish` files and the directory's `PATH` entry if other Cargo
+tools are installed there.
+
+Package-manager installations should be managed by the same package manager:
+
+```bash
+# Future Homebrew package
+brew upgrade tadak
+brew uninstall tadak
+
+# Cargo installation
+cargo install tadak --locked
+cargo uninstall tadak
+```
+
 ### Build from source
 
 ```bash
