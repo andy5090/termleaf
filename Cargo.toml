@@ -1,6 +1,6 @@
 [package]
 name = "tadak"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A distraction-free terminal writing app with big pixel fonts, a mechanical-typewriter feel, and live Hangul (Korean) jamo-by-jamo composition."
 repository = "https://github.com/andy5090/tadak"

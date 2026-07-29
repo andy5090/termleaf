@@ -7,9 +7,16 @@ and Tadak uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-30
+
 ### Added
 
-- Nothing yet.
+- Curl installations now include `tadak-update` for future in-place updates.
+
+### Changed
+
+- Reworked the carriage-return effect as a connected lever clack, inharmonic
+  bell, ratcheting carriage sweep, and damped cabinet stop.
 
 ## [0.1.0] - 2026-07-30
 
@@ -34,5 +41,6 @@ and Tadak uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/tadak/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/andy5090/tadak/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/andy5090/tadak/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/andy5090/tadak/releases/tag/v0.1.0
