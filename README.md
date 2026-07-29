@@ -42,16 +42,47 @@ in the big-pixel focus zone.
 - **Built-in guidance** — the startup guide explains OS vs. Live Korean input;
   its “Don’t show again” checkbox is optional, and `F1` always reopens the full
   shortcut reference.
-- **Save & autosave** — plain `.txt`, with time-based autosave.
+- **Save & autosave** — plain-text documents (`.md` by default), with
+  time-based autosave.
 - **Small footprint** — direct dependencies are `crossterm` and `rodio`.
 
-## Install / run
+## Install
+
+### macOS and Linux (recommended)
+
+The installer detects Apple Silicon, Intel macOS, or x86_64 Linux, verifies the
+release archive, and installs `tadak` into Cargo's conventional binary
+directory:
 
 ```bash
-# from the repo
-cargo run --release            # start with an empty buffer
-cargo run --release -- note.txt  # open (or create on save) a file
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/andy5090/tadak/releases/latest/download/tadak-installer.sh | sh
 ```
+
+Open a new terminal if the installer updates your `PATH`, then run:
+
+```bash
+tadak
+tadak memo.md
+tadak --help
+```
+
+Prebuilt archives and checksums are also available from the
+[latest GitHub release](https://github.com/andy5090/tadak/releases/latest).
+Release history is maintained in the [changelog](CHANGELOG.md).
+
+### Build from source
+
+```bash
+git clone https://github.com/andy5090/tadak.git
+cd tadak
+cargo install --path . --locked
+```
+
+Linux source builds require the ALSA development package, commonly
+`libasound2-dev` on Debian and Ubuntu. Homebrew and native Linux packages are
+planned as additional installation paths; they will reuse the same GitHub
+release artifacts.
 
 ## Keybindings
 
