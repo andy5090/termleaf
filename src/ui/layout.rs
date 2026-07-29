@@ -17,12 +17,22 @@ pub struct Layout {
     pub doc_height: u16,
     /// Row of the status bar, if visible.
     pub status_row: Option<u16>,
+    /// Row of the persistent shortcut guide, if visible.
+    pub shortcut_row: Option<u16>,
 }
 
 impl Layout {
     pub fn compute(cols: u16, rows: u16, cfg: &Config) -> Layout {
         let status_visible = !cfg.focus_mode;
-        let status_reserve: u16 = if status_visible { 1 } else { 0 };
+        let status_reserve: u16 = if status_visible {
+            if rows >= 3 {
+                2
+            } else {
+                1
+            }
+        } else {
+            0
+        };
         let avail = rows.saturating_sub(status_reserve).max(1);
 
         let mut big_enabled = false;
@@ -31,7 +41,10 @@ impl Layout {
             let px_h = cfg.font_size;
             // Galmuri's 10 bitmap rows are packed two per terminal row.
             let desired = 5 * px_h + 2;
-            let cap = avail / 2;
+            // Reserve only the minimum useful document height. Taller
+            // terminals can show all five levels proportionally; standard
+            // terminals use adaptive horizontal scaling for levels 4–5.
+            let cap = avail.saturating_sub(3);
             let h = desired.min(cap);
             // Only show it if it fits without starving the document.
             if h >= 5 && avail.saturating_sub(h) >= 3 {
@@ -42,7 +55,16 @@ impl Layout {
 
         let doc_top = big_height;
         let doc_height = avail.saturating_sub(big_height).max(1);
-        let status_row = if status_visible { Some(rows - 1) } else { None };
+        let status_row = if status_visible {
+            Some(rows.saturating_sub(status_reserve))
+        } else {
+            None
+        };
+        let shortcut_row = if status_reserve == 2 {
+            Some(rows - 1)
+        } else {
+            None
+        };
 
         Layout {
             cols,
@@ -52,6 +74,7 @@ impl Layout {
             doc_top,
             doc_height,
             status_row,
+            shortcut_row,
         }
     }
 }
@@ -59,6 +82,7 @@ impl Layout {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::settings::{MAX_FONT, MIN_FONT};
 
     #[test]
     fn normal_layout_reserves_status_and_document_space() {
@@ -66,10 +90,11 @@ mod tests {
         let layout = Layout::compute(80, 24, &cfg);
 
         assert_eq!(layout.cols, 80);
-        assert_eq!(layout.status_row, Some(23));
+        assert_eq!(layout.status_row, Some(22));
+        assert_eq!(layout.shortcut_row, Some(23));
         assert!(layout.big_enabled);
         assert!(layout.doc_height >= 3);
-        assert_eq!(layout.big_height + layout.doc_height, 23);
+        assert_eq!(layout.big_height + layout.doc_height, 22);
     }
 
     #[test]
@@ -77,11 +102,25 @@ mod tests {
         let mut cfg = Config::default();
         let compact = Layout::compute(20, 4, &cfg);
         assert!(!compact.big_enabled);
-        assert_eq!(compact.doc_height, 3);
+        assert_eq!(compact.doc_height, 2);
+        assert_eq!(compact.shortcut_row, Some(3));
 
         cfg.focus_mode = true;
         let focused = Layout::compute(20, 4, &cfg);
         assert_eq!(focused.status_row, None);
+        assert_eq!(focused.shortcut_row, None);
         assert_eq!(focused.doc_height, 4);
+    }
+
+    #[test]
+    fn big_zone_uses_available_height_without_starving_the_document() {
+        let mut cfg = Config::default();
+        let mut heights = Vec::new();
+        for size in MIN_FONT..=MAX_FONT {
+            cfg.font_size = size;
+            heights.push(Layout::compute(80, 24, &cfg).big_height);
+        }
+        assert_eq!(heights, [7, 12, 17, 19, 19]);
+        assert!(heights.windows(2).all(|pair| pair[0] <= pair[1]));
     }
 }

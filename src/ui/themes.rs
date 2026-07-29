@@ -25,35 +25,55 @@ impl Theme {
         match name {
             "night" => Theme {
                 fg: Color::Rgb {
-                    r: 220,
-                    g: 220,
-                    b: 230,
+                    r: 242,
+                    g: 242,
+                    b: 242,
                 },
-                bg: Color::Rgb {
-                    r: 18,
-                    g: 18,
-                    b: 24,
-                },
+                bg: Color::Rgb { r: 0, g: 0, b: 0 },
                 dim: Color::Rgb {
-                    r: 110,
-                    g: 110,
-                    b: 130,
+                    r: 92,
+                    g: 92,
+                    b: 92,
                 },
                 accent: Color::Rgb {
-                    r: 120,
-                    g: 200,
+                    r: 255,
+                    g: 255,
                     b: 255,
                 },
                 pixel: Color::Rgb {
-                    r: 235,
-                    g: 235,
-                    b: 245,
+                    r: 242,
+                    g: 242,
+                    b: 242,
                 },
                 pixel_off: Color::Rgb {
-                    r: 40,
-                    g: 40,
-                    b: 52,
+                    r: 28,
+                    g: 28,
+                    b: 28,
                 },
+            },
+            "xt" => Theme {
+                fg: Color::Rgb {
+                    r: 76,
+                    g: 255,
+                    b: 112,
+                },
+                bg: Color::Rgb { r: 0, g: 5, b: 1 },
+                dim: Color::Rgb {
+                    r: 12,
+                    g: 74,
+                    b: 27,
+                },
+                accent: Color::Rgb {
+                    r: 178,
+                    g: 255,
+                    b: 188,
+                },
+                pixel: Color::Rgb {
+                    r: 76,
+                    g: 255,
+                    b: 112,
+                },
+                pixel_off: Color::Rgb { r: 2, g: 28, b: 8 },
             },
             "amber" => Theme {
                 fg: Color::Rgb {
@@ -119,7 +139,8 @@ impl Theme {
     pub fn next(name: &str) -> &'static str {
         match name {
             "paper" => "night",
-            "night" => "amber",
+            "night" => "xt",
+            "xt" => "amber",
             _ => "paper",
         }
     }
@@ -132,9 +153,11 @@ mod tests {
     #[test]
     fn cycles_all_themes_and_falls_back_to_paper() {
         assert_eq!(Theme::next("paper"), "night");
-        assert_eq!(Theme::next("night"), "amber");
+        assert_eq!(Theme::next("night"), "xt");
+        assert_eq!(Theme::next("xt"), "amber");
         assert_eq!(Theme::next("amber"), "paper");
         assert_eq!(Theme::next("unknown"), "paper");
         assert_eq!(Theme::by_name("unknown").fg, Theme::by_name("paper").fg);
+        assert_ne!(Theme::by_name("xt").fg, Theme::by_name("night").fg);
     }
 }

@@ -72,8 +72,9 @@ impl Editor {
 
     /// A short slice of the current line for the big-pixel focus zone.
     ///
-    /// Pending Hangul composition is inserted at the cursor so the enlarged
-    /// view mirrors what the document will look like once it is committed.
+    /// Pending Hangul composition is inserted at the cursor as one evolving
+    /// glyph (`ㅎ` → `하` → `한`), so it always occupies a single character
+    /// slot in the enlarged view.
     /// When the line is longer than `max_chars`, the window follows the cursor
     /// and favors the text immediately before it.
     pub fn focus_text(&self, max_chars: usize) -> Vec<char> {
@@ -127,17 +128,18 @@ impl Editor {
         }
     }
 
-    pub fn backspace(&mut self) {
+    pub fn backspace(&mut self) -> bool {
         if !self.composer.is_empty() {
             self.composer.backspace();
             self.doc.dirty = true;
-            return;
+            return true;
         }
         let Cursor { row, col } = self.doc.cursor;
         if col > 0 {
             self.buffer.lines[row].remove(col - 1);
             self.doc.cursor.col -= 1;
             self.doc.dirty = true;
+            true
         } else if row > 0 {
             let cur = self.buffer.lines.remove(row);
             let prev_len = self.buffer.lines[row - 1].len();
@@ -145,6 +147,28 @@ impl Editor {
             self.doc.cursor.row -= 1;
             self.doc.cursor.col = prev_len;
             self.doc.dirty = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Delete the character under the cursor. At the end of a line, join the
+    /// following line just like a conventional editor's Delete key.
+    pub fn delete_forward(&mut self) -> bool {
+        self.flush();
+        let Cursor { row, col } = self.doc.cursor;
+        if col < self.buffer.line_len(row) {
+            self.buffer.lines[row].remove(col);
+            self.doc.dirty = true;
+            true
+        } else if row + 1 < self.buffer.line_count() {
+            let next = self.buffer.lines.remove(row + 1);
+            self.buffer.lines[row].extend(next);
+            self.doc.dirty = true;
+            true
+        } else {
+            false
         }
     }
 
@@ -221,21 +245,31 @@ impl Editor {
     /// Save the document. Falls back to `untitled.txt` in the current
     /// directory when no path is set. Returns the path written.
     pub fn save(&mut self) -> io::Result<PathBuf> {
-        self.flush();
         let path = self
             .doc
             .path
             .clone()
             .unwrap_or_else(|| PathBuf::from("untitled.txt"));
+        self.write_to(&path)
+    }
+
+    fn write_to(&mut self, path: &Path) -> io::Result<PathBuf> {
+        self.flush();
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
                 fs::create_dir_all(parent)?;
             }
         }
-        fs::write(&path, self.buffer.to_text())?;
-        self.doc.path = Some(path.clone());
+        fs::write(path, self.buffer.to_text())?;
+        self.doc.path = Some(path.to_path_buf());
         self.doc.dirty = false;
-        Ok(path)
+        Ok(path.to_path_buf())
+    }
+
+    /// Save to an explicitly chosen path and make it the document's current
+    /// path for subsequent `save` calls.
+    pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> io::Result<PathBuf> {
+        self.write_to(path.as_ref())
     }
 
     pub fn word_count(&self) -> usize {
@@ -327,6 +361,57 @@ mod tests {
     }
 
     #[test]
+    fn focus_text_updates_hangul_inside_one_character_slot() {
+        let mut editor = Editor::new();
+
+        editor.input_jamo('ㅎ');
+        assert_eq!(editor.focus_text(4), ['ㅎ']);
+        editor.input_jamo('ㅏ');
+        assert_eq!(editor.focus_text(4), ['하']);
+        editor.input_jamo('ㄴ');
+        assert_eq!(editor.focus_text(4), ['한']);
+    }
+
+    #[test]
+    fn backspace_reports_whether_it_changed_the_document() {
+        let mut editor = Editor::new();
+        assert!(!editor.backspace());
+
+        editor.input_jamo('ㅎ');
+        assert!(editor.backspace());
+        assert!(!editor.backspace());
+
+        editor.insert_char('a');
+        assert!(editor.backspace());
+        assert!(!editor.backspace());
+    }
+
+    #[test]
+    fn delete_removes_the_next_character_and_joins_lines() {
+        let mut editor = Editor::new();
+        for character in "abc".chars() {
+            editor.insert_char(character);
+        }
+        editor.move_home();
+        assert!(editor.delete_forward());
+        assert_eq!(editor.buffer.to_text(), "bc");
+        assert_eq!(editor.cursor(), Cursor { row: 0, col: 0 });
+
+        editor.move_end();
+        editor.newline();
+        editor.insert_char('d');
+        editor.move_home();
+        editor.move_left();
+        assert_eq!(editor.cursor(), Cursor { row: 0, col: 2 });
+        assert!(editor.delete_forward());
+        assert_eq!(editor.buffer.to_text(), "bcd");
+        assert_eq!(editor.cursor(), Cursor { row: 0, col: 2 });
+
+        editor.move_end();
+        assert!(!editor.delete_forward());
+    }
+
+    #[test]
     fn save_creates_parent_directories_and_clears_dirty_flag() {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -345,6 +430,28 @@ mod tests {
             "한"
         );
         assert!(!editor.doc.dirty);
+
+        fs::remove_dir_all(root).expect("temporary test directory should be removable");
+    }
+
+    #[test]
+    fn save_as_updates_the_document_path() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("tadak-save-as-{unique}"));
+        let path = root.join("chosen.txt");
+
+        let mut editor = Editor::new();
+        editor.insert_char('글');
+        let saved = editor
+            .save_as(&path)
+            .expect("save-as should write the file");
+
+        assert_eq!(saved, path);
+        assert_eq!(editor.doc.path.as_deref(), Some(path.as_path()));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "글");
 
         fs::remove_dir_all(root).expect("temporary test directory should be removable");
     }

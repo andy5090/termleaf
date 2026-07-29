@@ -217,20 +217,19 @@ impl Composer {
         self.cho.is_none() && self.jung.is_none() && self.jong == 0
     }
 
-    /// Number of jamo currently in the composing cluster (0..=3). Handy for a
-    /// "stage" indicator in the UI.
+    /// Number of logical parts in the composing cluster (0..=3).
     pub fn stage(&self) -> usize {
-        let mut n = 0;
+        let mut stage = 0;
         if self.cho.is_some() {
-            n += 1;
+            stage += 1;
         }
         if self.jung.is_some() {
-            n += 1;
+            stage += 1;
         }
         if self.jong != 0 {
-            n += 1;
+            stage += 1;
         }
-        n
+        stage
     }
 
     /// The current cluster rendered as a single (possibly partial) glyph.

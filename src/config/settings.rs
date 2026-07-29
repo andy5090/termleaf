@@ -1,29 +1,40 @@
 //! User-configurable settings, persisted as a tiny `key = value` file.
 //!
-//! We intentionally avoid a serialization crate to keep the dependency tree
-//! to just `crossterm`.
+//! We intentionally avoid a serialization crate to keep configuration simple
+//! and the dependency tree small.
 
 use std::fs;
 use std::path::PathBuf;
 
 pub const MIN_FONT: u16 = 1;
-pub const MAX_FONT: u16 = 6;
+pub const MAX_FONT: u16 = 5;
 
 /// Runtime configuration for the app.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Whether letter keys compose Hangul (`true`) or type Latin (`false`).
-    pub hangul_mode: bool,
+    /// Whether Tadak's optional live two-set composer handles ASCII keys.
+    /// When false, input is left entirely to the operating-system IME.
+    pub live_composition: bool,
     /// Focus mode hides the status bar and other chrome.
     pub focus_mode: bool,
-    /// Play a soft "clack" (terminal bell) on each keystroke.
+    /// Play mechanical key and backspace effects.
     pub sound: bool,
+    /// Play the separate backspace effect when master sound is enabled.
+    pub backspace_sound: bool,
+    /// Play the carriage-return bell when master sound is enabled.
+    pub return_sound: bool,
+    /// Selected printing-key sound (`classic`, `deep`, or `soft`).
+    pub sound_profile: String,
     /// Show the big-pixel focus zone.
     pub big_font: bool,
     /// Pixel scale for the big-font renderer (`MIN_FONT..=MAX_FONT`).
     pub font_size: u16,
     /// Theme name (resolved by `ui::themes`).
     pub theme: String,
+    /// Interface language (`en` or `ko`).
+    pub language: String,
+    /// Show the welcome/help overlay when Tadak starts.
+    pub show_welcome: bool,
     /// Autosave interval in seconds; `0` disables autosave.
     pub autosave_secs: u64,
 }
@@ -31,12 +42,17 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            hangul_mode: false,
+            live_composition: false,
             focus_mode: false,
             sound: true,
+            backspace_sound: true,
+            return_sound: true,
+            sound_profile: "classic".to_string(),
             big_font: true,
             font_size: 2,
             theme: "paper".to_string(),
+            language: "en".to_string(),
+            show_welcome: true,
             autosave_secs: 30,
         }
     }
@@ -56,13 +72,17 @@ impl Config {
 
     /// Load config, falling back to defaults for anything missing or invalid.
     pub fn load() -> Self {
-        let mut cfg = Config::default();
         let Some(path) = Config::path() else {
-            return cfg;
+            return Config::default();
         };
         let Ok(text) = fs::read_to_string(path) else {
-            return cfg;
+            return Config::default();
         };
+        Config::from_text(&text)
+    }
+
+    fn from_text(text: &str) -> Self {
+        let mut cfg = Config::default();
         for line in text.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -73,9 +93,21 @@ impl Config {
             };
             let (key, value) = (key.trim(), value.trim());
             match key {
-                "hangul_mode" => cfg.hangul_mode = parse_bool(value, cfg.hangul_mode),
+                "live_composition" => {
+                    cfg.live_composition = parse_bool(value, cfg.live_composition)
+                }
                 "focus_mode" => cfg.focus_mode = parse_bool(value, cfg.focus_mode),
                 "sound" => cfg.sound = parse_bool(value, cfg.sound),
+                "backspace_sound" => cfg.backspace_sound = parse_bool(value, cfg.backspace_sound),
+                "return_sound" => cfg.return_sound = parse_bool(value, cfg.return_sound),
+                "sound_profile" => {
+                    cfg.sound_profile = match value {
+                        "deep" => "deep",
+                        "soft" => "soft",
+                        _ => "classic",
+                    }
+                    .to_string();
+                }
                 "big_font" => cfg.big_font = parse_bool(value, cfg.big_font),
                 "font_size" => {
                     if let Ok(n) = value.parse::<u16>() {
@@ -83,6 +115,14 @@ impl Config {
                     }
                 }
                 "theme" => cfg.theme = value.to_string(),
+                "language" => {
+                    cfg.language = match value {
+                        "ko" => "ko",
+                        _ => "en",
+                    }
+                    .to_string();
+                }
+                "show_welcome" => cfg.show_welcome = parse_bool(value, cfg.show_welcome),
                 "autosave_secs" => {
                     if let Ok(n) = value.parse::<u64>() {
                         cfg.autosave_secs = n;
@@ -103,24 +143,37 @@ impl Config {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let body = format!(
+        fs::write(path, self.to_text())
+    }
+
+    fn to_text(&self) -> String {
+        format!(
             "# Tadak configuration\n\
-             hangul_mode = {}\n\
+             live_composition = {}\n\
              focus_mode = {}\n\
              sound = {}\n\
+             backspace_sound = {}\n\
+             return_sound = {}\n\
+             sound_profile = {}\n\
              big_font = {}\n\
              font_size = {}\n\
              theme = {}\n\
+             language = {}\n\
+             show_welcome = {}\n\
              autosave_secs = {}\n",
-            self.hangul_mode,
+            self.live_composition,
             self.focus_mode,
             self.sound,
+            self.backspace_sound,
+            self.return_sound,
+            self.sound_profile,
             self.big_font,
             self.font_size,
             self.theme,
+            self.language,
+            self.show_welcome,
             self.autosave_secs,
-        );
-        fs::write(path, body)
+        )
     }
 
     pub fn font_inc(&mut self) {
@@ -129,6 +182,28 @@ impl Config {
 
     pub fn font_dec(&mut self) {
         self.font_size = self.font_size.saturating_sub(1).max(MIN_FONT);
+    }
+
+    pub fn toggle_language(&mut self) {
+        self.language = if self.language == "ko" { "en" } else { "ko" }.to_string();
+    }
+
+    pub fn cycle_sound_profile(&mut self) {
+        self.sound_profile = match self.sound_profile.as_str() {
+            "classic" => "deep",
+            "deep" => "soft",
+            _ => "classic",
+        }
+        .to_string();
+    }
+
+    pub fn previous_sound_profile(&mut self) {
+        self.sound_profile = match self.sound_profile.as_str() {
+            "classic" => "soft",
+            "soft" => "deep",
+            _ => "classic",
+        }
+        .to_string();
     }
 }
 
@@ -168,5 +243,66 @@ mod tests {
         cfg.font_size = MIN_FONT;
         cfg.font_dec();
         assert_eq!(cfg.font_size, MIN_FONT);
+    }
+
+    #[test]
+    fn interface_language_defaults_to_english_and_toggles() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.language, "en");
+        cfg.toggle_language();
+        assert_eq!(cfg.language, "ko");
+        cfg.toggle_language();
+        assert_eq!(cfg.language, "en");
+    }
+
+    #[test]
+    fn sound_profiles_cycle_and_backspace_sound_is_independent() {
+        let mut cfg = Config::default();
+        assert!(cfg.backspace_sound);
+        assert!(cfg.return_sound);
+        assert_eq!(cfg.sound_profile, "classic");
+        cfg.cycle_sound_profile();
+        assert_eq!(cfg.sound_profile, "deep");
+        cfg.cycle_sound_profile();
+        assert_eq!(cfg.sound_profile, "soft");
+        cfg.cycle_sound_profile();
+        assert_eq!(cfg.sound_profile, "classic");
+    }
+
+    #[test]
+    fn persisted_text_restores_the_last_interface_and_sound_settings() {
+        let cfg = Config {
+            live_composition: true,
+            focus_mode: true,
+            sound: true,
+            backspace_sound: false,
+            return_sound: false,
+            sound_profile: "soft".to_string(),
+            big_font: false,
+            font_size: 3,
+            theme: "xt".to_string(),
+            language: "ko".to_string(),
+            show_welcome: false,
+            autosave_secs: 12,
+        };
+
+        let restored = Config::from_text(&cfg.to_text());
+        assert!(restored.live_composition);
+        assert!(restored.focus_mode);
+        assert!(!restored.backspace_sound);
+        assert!(!restored.return_sound);
+        assert_eq!(restored.sound_profile, "soft");
+        assert!(!restored.big_font);
+        assert_eq!(restored.font_size, 3);
+        assert_eq!(restored.theme, "xt");
+        assert_eq!(restored.language, "ko");
+        assert!(!restored.show_welcome);
+        assert_eq!(restored.autosave_secs, 12);
+    }
+
+    #[test]
+    fn legacy_hangul_toggle_does_not_override_the_new_os_ime_default() {
+        let restored = Config::from_text("hangul_mode = true\n");
+        assert!(!restored.live_composition);
     }
 }

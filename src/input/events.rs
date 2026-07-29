@@ -12,6 +12,7 @@ pub enum Action {
     /// Feed a jamo keystroke into the Hangul composer.
     Jamo(char),
     Backspace,
+    Delete,
     Newline,
     Left,
     Right,
@@ -19,37 +20,51 @@ pub enum Action {
     Down,
     Home,
     End,
-    ToggleHangul,
+    ToggleLiveComposition,
+    ShowHelp,
     ToggleFocus,
     ToggleBigFont,
     ToggleSound,
     ToggleTheme,
+    ToggleLanguage,
+    ShowSoundSettings,
+    CycleSoundProfile,
     FontInc,
     FontDec,
+    Open,
     Save,
+    SaveAs,
     Quit,
     Ignore,
 }
 
-/// Translate a key event into an [`Action`]. `hangul` selects whether letter
-/// keys are treated as jamo or as literal Latin input.
-pub fn map_key(key: KeyEvent, hangul: bool) -> Action {
+/// Translate a key event into an [`Action`]. `live_composition` opts into
+/// Tadak's raw two-set mapping; otherwise all text is left to the OS IME.
+pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
     match key.code {
         KeyCode::Char(c) if ctrl => match c.to_ascii_lowercase() {
             'q' | 'c' => Action::Quit,
+            'o' => Action::Open,
+            's' if key.modifiers.contains(KeyModifiers::SHIFT) => Action::SaveAs,
             's' => Action::Save,
             _ => Action::Ignore,
         },
-        KeyCode::F(2) => Action::ToggleHangul,
+        KeyCode::F(1) => Action::ShowHelp,
+        KeyCode::F(2) => Action::ToggleLiveComposition,
         KeyCode::F(3) => Action::ToggleFocus,
         KeyCode::F(4) => Action::ToggleBigFont,
         KeyCode::F(5) => Action::ToggleSound,
         KeyCode::F(6) => Action::ToggleTheme,
         KeyCode::F(7) => Action::FontDec,
         KeyCode::F(8) => Action::FontInc,
+        KeyCode::F(9) => Action::ToggleLanguage,
+        KeyCode::F(10) => Action::ShowSoundSettings,
+        KeyCode::F(11) => Action::CycleSoundProfile,
+        KeyCode::F(12) => Action::SaveAs,
         KeyCode::Backspace => Action::Backspace,
+        KeyCode::Delete => Action::Delete,
         KeyCode::Enter => Action::Newline,
         KeyCode::Left => Action::Left,
         KeyCode::Right => Action::Right,
@@ -59,7 +74,7 @@ pub fn map_key(key: KeyEvent, hangul: bool) -> Action {
         KeyCode::End => Action::End,
         KeyCode::Tab => Action::InsertChar('\t'),
         KeyCode::Char(c) => {
-            if hangul {
+            if live_composition {
                 match key_to_jamo(c) {
                     Some(j) => Action::Jamo(j),
                     None => Action::InsertChar(c),
@@ -86,8 +101,49 @@ mod tests {
             Action::Save
         );
         assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL),
+                false
+            ),
+            Action::Open
+        );
+        assert_eq!(
+            map_key(
+                KeyEvent::new(
+                    KeyCode::Char('S'),
+                    KeyModifiers::CONTROL | KeyModifiers::SHIFT
+                ),
+                false
+            ),
+            Action::SaveAs
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE), false),
+            Action::ShowHelp
+        );
+        assert_eq!(
             map_key(KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE), false),
-            Action::ToggleHangul
+            Action::ToggleLiveComposition
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE), false),
+            Action::ToggleLanguage
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE), false),
+            Action::ShowSoundSettings
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::F(11), KeyModifiers::NONE), false),
+            Action::CycleSoundProfile
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE), false),
+            Action::SaveAs
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE), false),
+            Action::Delete
         );
         assert_eq!(
             map_key(
@@ -99,12 +155,19 @@ mod tests {
     }
 
     #[test]
-    fn maps_letters_to_jamo_only_in_hangul_mode() {
+    fn maps_letters_to_jamo_only_in_live_composition_mode() {
         let key = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE);
         assert_eq!(map_key(key, false), Action::InsertChar('g'));
         assert_eq!(map_key(key, true), Action::Jamo('ㅎ'));
 
         let punctuation = KeyEvent::new(KeyCode::Char('!'), KeyModifiers::SHIFT);
         assert_eq!(map_key(punctuation, true), Action::InsertChar('!'));
+    }
+
+    #[test]
+    fn os_ime_committed_hangul_is_inserted_without_remapping() {
+        let committed = KeyEvent::new(KeyCode::Char('한'), KeyModifiers::NONE);
+        assert_eq!(map_key(committed, false), Action::InsertChar('한'));
+        assert_eq!(map_key(committed, true), Action::InsertChar('한'));
     }
 }

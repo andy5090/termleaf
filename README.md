@@ -15,25 +15,35 @@ The name comes from the Korean onomatopoeia *타닥타닥* — the clatter of ke
 
 ## Why
 
-Most terminals hand your program only the *finished* Hangul syllable, hiding the
-composition. Tadak drives composition itself (a 2-set / 두벌식 automaton), so it
-can put the process front and center in a big-pixel focus zone — great for
-writing practice, screencasts, or just enjoying the act of typing.
+Most terminals hand applications only the *finished* Hangul syllable, hiding
+the composition. Tadak normally respects the operating-system IME, but offers
+an optional live 2-set (두벌식) composer that puts the process front and center
+in the big-pixel focus zone.
 
 ## Features
 
 - **Big pixel font zone** — a short cursor-side phrase is drawn with
   [Galmuri9](https://quiple.dev/font/galmuri) pixels, including complete Hangul
   and distinct Latin uppercase/lowercase glyphs.
-- **Live Hangul jamo-by-jamo composition** — lead consonant → vowel → tail
-  consonant appear step by step, including complex vowels (ㅘ, ㅢ …), double
-  tails (ㄳ, ㄺ …), and the ghost rule (닭 + ㅏ → 달가).
-- **Mechanical feel** — a short, built-in mechanical typewriter impact and
-  key-return sound on each keystroke, played without blocking input.
+- **Optional live Hangul composition** — press `F2` to make one enlarged
+  character slot evolve in place as `ㅎ` → `하` → `한`, matching normal Hangul,
+  including complex vowels (ㅘ, ㅢ …), double tails (ㄳ, ㄺ …), and the ghost
+  rule (닭 + ㅏ → 달가).
+- **Mechanical feel** — choose `classic`, `deep`, or `soft` built-in typewriter
+  strikes; deletion uses a short, gentle, rate-limited release, while Enter
+  plays a margin bell and carriage return. Master, deletion, and return effects
+  can be controlled independently without blocking input.
+- **Open and save in-app** — choose a filename on first save, reopen another
+  document, or save under a new name without leaving Tadak.
 - **Focus mode** — hides all chrome so only your words remain.
-- **Themes** — `paper`, `night`, `amber`.
+- **Themes** — `paper`, true-black `night`, phosphor-green `xt`, and `amber`.
+- **English or Korean UI** — guidance defaults to English and toggles in-app;
+  the last language, theme, sound, and display choices are restored on launch.
+- **Built-in guidance** — the startup guide explains OS vs. Live Korean input;
+  its “Don’t show again” checkbox is optional, and `F1` always reopens the full
+  shortcut reference.
 - **Save & autosave** — plain `.txt`, with time-based autosave.
-- **Tiny footprint** — one dependency (`crossterm`).
+- **Small footprint** — direct dependencies are `crossterm` and `rodio`.
 
 ## Install / run
 
@@ -47,23 +57,58 @@ cargo run --release -- note.txt  # open (or create on save) a file
 
 | Key | Action |
 | --- | --- |
-| typing | insert text (or compose Hangul in 한 mode) |
-| `F2` | toggle 한글 / English input |
+| typing | insert text from the operating-system input method |
+| `F1` | open the help and startup-guide settings |
+| `F2` | toggle Tadak's optional `Live Korean` composer |
 | `F3` | toggle focus mode |
 | `F4` | toggle the big-font zone |
 | `F5` | toggle system-audio keystroke sound |
-| `F6` | cycle theme |
-| `F7` / `F8` | decrease / increase big-font size |
-| `Ctrl+S` | save |
+| `F6` | cycle `paper` / `night` / `xt` / `amber` theme |
+| `F7` / `F8` | decrease / increase big-font size across five effective levels |
+| `F9` | toggle English / Korean interface guidance |
+| `F10` | open detailed sound settings (master / delete / return / key style) |
+| `F11` | cycle `classic` / `deep` / `soft` typewriter sound |
+| `Ctrl+O` | open a file (a missing path starts a new file there) |
+| `Ctrl+S` | save; the first save asks for a filename |
+| `F12` | save as (reliable in terminals) |
+| `Ctrl+Shift+S` | save as when the terminal preserves the Shift modifier |
 | `Ctrl+Q` / `Ctrl+C` | quit |
-| arrows / Home / End / Backspace / Enter | usual editing |
+| arrows / Home / End / Backspace / Delete / Enter | usual editing |
+
+`Enter` plays a typewriter margin bell and carriage-return effect. In the
+`F10` panel, use `↑`/`↓` to select an option, `Space` or `←`/`→` to change it,
+and `Enter`/`Esc` to close.
+
+When saving, a filename without an extension defaults to Markdown: `memo`
+becomes `memo.md`. An explicit extension is preserved, so `memo.txt` remains
+`memo.txt`.
+
+The open prompt lists document files (`.txt`, `.md`, `.markdown`, `.rst`,
+`.adoc`, `.asciidoc`, `.org`, and `.tex`) and subdirectories beside the current document. Use
+`↑`/`↓` to select, `Tab` to complete the highlighted path, and `Enter` to open
+the document or enter a directory. Typing filters the list by filename.
 
 ## Typing Korean
 
-Press `F2` to switch to 한 mode. Tadak uses the standard **두벌식** layout, e.g.
-`g k s` → `ㅎ ㅏ ㄴ` → **한**. Because Tadak composes the syllable itself, the
-big zone shows each jamo appearing in turn, and `Backspace` disassembles the
-cluster one jamo at a time.
+By default the status bar shows `IME:OS`; use the normal Linux/desktop 한/영
+shortcut and Tadak accepts the committed Korean text from that IME. No Tadak
+shortcut is required.
+
+`F2` toggles the optional `Live Korean` (`IME:LIVE`) practice mode; it is not
+the operating system's 한/영 switch. In this mode Tadak maps raw English-layout keys using standard
+**두벌식**, e.g. `g k s` → **한**. The big zone updates one character slot in
+place as `ㅎ` → `하` → `한`, and `Backspace` disassembles that same cluster one
+step at a time. Set the OS keyboard to English while using `IME:LIVE`, since
+Tadak needs the raw Latin key events to expose each intermediate step.
+
+You can also open a document directly from the shell:
+
+```bash
+tadak memo.txt
+```
+
+An existing path is loaded; a missing path becomes a new document that will be
+created there on save.
 
 ## Configuration
 
@@ -71,14 +116,23 @@ Settings live at `~/.config/tadak/config` (a simple `key = value` file), written
 on exit and editable by hand:
 
 ```
-hangul_mode = false
+live_composition = false
 focus_mode = false
 sound = true
+backspace_sound = true
+return_sound = true
+sound_profile = classic
 big_font = true
 font_size = 2
+# theme: paper, night, xt, or amber
 theme = paper
+language = en
+show_welcome = true
 autosave_secs = 30
 ```
+
+These values are updated on normal exit, so the next run restores the last
+interface language, theme, audio choices, input mode, and display settings.
 
 ## Architecture
 

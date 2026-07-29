@@ -8,59 +8,123 @@
 use rodio::buffer::SamplesBuffer;
 use rodio::cpal::BufferSize;
 use rodio::{DeviceSinkBuilder, MixerDeviceSink};
+use std::cell::Cell;
 use std::num::NonZero;
+use std::time::{Duration, Instant};
 
 const TYPEWRITER_WAV: &[u8] = include_bytes!("../assets/typewriter-key.wav");
+const TYPEWRITER_DEEP_WAV: &[u8] = include_bytes!("../assets/typewriter-key-deep.wav");
+const TYPEWRITER_SOFT_WAV: &[u8] = include_bytes!("../assets/typewriter-key-soft.wav");
+const BACKSPACE_WAV: &[u8] = include_bytes!("../assets/typewriter-backspace.wav");
+const RETURN_WAV: &[u8] = include_bytes!("../assets/typewriter-return.wav");
 const LOW_LATENCY_BUFFER_FRAMES: u32 = 512;
+const BACKSPACE_MIN_INTERVAL: Duration = Duration::from_millis(55);
 
-/// Best-effort typewriter sound player backed by a persistent audio stream.
-pub struct SoundPlayer {
-    stream: Option<MixerDeviceSink>,
+struct Clip {
     samples: Vec<f32>,
     channels: u16,
     sample_rate: u32,
 }
 
+/// Best-effort typewriter sound player backed by a persistent audio stream.
+pub struct SoundPlayer {
+    stream: Option<MixerDeviceSink>,
+    classic_key: Clip,
+    deep_key: Clip,
+    soft_key: Clip,
+    backspace: Clip,
+    carriage_return: Clip,
+    last_backspace: Cell<Option<Instant>>,
+}
+
 impl SoundPlayer {
     pub fn new() -> Self {
-        let decoded = decode_pcm_wave(TYPEWRITER_WAV);
         let stream = DeviceSinkBuilder::from_default_device()
             .and_then(|builder| {
                 builder
                     .with_buffer_size(BufferSize::Fixed(LOW_LATENCY_BUFFER_FRAMES))
                     .open_sink_or_fallback()
             })
-            .ok();
+            .ok()
+            .map(|mut stream| {
+                // The stream intentionally lives until normal application
+                // shutdown, so Rodio's development-only drop warning is noise.
+                stream.log_on_drop(false);
+                stream
+            });
 
-        let (channels, sample_rate, samples) = decoded.unwrap_or_else(|| (1, 44_100, Vec::new()));
         Self {
             stream,
-            samples,
-            channels,
-            sample_rate,
+            classic_key: Clip::decode(TYPEWRITER_WAV),
+            deep_key: Clip::decode(TYPEWRITER_DEEP_WAV),
+            soft_key: Clip::decode(TYPEWRITER_SOFT_WAV),
+            backspace: Clip::decode(BACKSPACE_WAV),
+            carriage_return: Clip::decode(RETURN_WAV),
+            last_backspace: Cell::new(None),
         }
     }
 
-    /// Mix one key sound immediately. Rodio performs playback on its existing
-    /// audio thread, so this call does not block the editor event loop.
-    pub fn play(&self) {
+    /// Mix one printing-key strike immediately.
+    pub fn play_key(&self, profile: &str) {
+        let clip = match profile {
+            "deep" => &self.deep_key,
+            "soft" => &self.soft_key,
+            _ => &self.classic_key,
+        };
+        self.play(clip);
+    }
+
+    /// Mix the separate, gentle delete-key release effect.
+    pub fn play_backspace(&self) {
+        let now = Instant::now();
+        if !backspace_playback_allowed(self.last_backspace.get(), now) {
+            return;
+        }
+        self.last_backspace.set(Some(now));
+        self.play(&self.backspace);
+    }
+
+    /// Mix the margin bell and carriage-return travel effect.
+    pub fn play_return(&self) {
+        self.play(&self.carriage_return);
+    }
+
+    /// Rodio performs playback on its existing audio thread, so this call does
+    /// not block the editor event loop.
+    fn play(&self, clip: &Clip) {
         let Some(stream) = &self.stream else {
             return;
         };
-        if self.samples.is_empty() {
+        if clip.samples.is_empty() {
             return;
         }
-        let Some(channels) = NonZero::new(self.channels) else {
+        let Some(channels) = NonZero::new(clip.channels) else {
             return;
         };
-        let Some(sample_rate) = NonZero::new(self.sample_rate) else {
+        let Some(sample_rate) = NonZero::new(clip.sample_rate) else {
             return;
         };
         stream.mixer().add(SamplesBuffer::new(
             channels,
             sample_rate,
-            self.samples.clone(),
+            clip.samples.clone(),
         ));
+    }
+}
+
+fn backspace_playback_allowed(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|last| now.duration_since(last) >= BACKSPACE_MIN_INTERVAL)
+}
+
+impl Clip {
+    fn decode(wav: &[u8]) -> Self {
+        let (channels, sample_rate, samples) =
+            decode_pcm_wave(wav).unwrap_or_else(|| (1, 44_100, Vec::new()));
+        Self {
+            samples,
+            channels,
+            sample_rate,
+        }
     }
 }
 
@@ -105,16 +169,59 @@ mod tests {
 
     #[test]
     fn embedded_typewriter_sound_is_valid_pcm() {
-        let (channels, sample_rate, samples) =
-            decode_pcm_wave(TYPEWRITER_WAV).expect("embedded WAV should decode");
-        assert_eq!(channels, 1);
-        assert_eq!(sample_rate, 44_100);
-        assert!(samples.len() > 2_000);
-        assert!(samples.iter().any(|sample| sample.abs() > 0.5));
+        for wav in [
+            TYPEWRITER_WAV,
+            TYPEWRITER_DEEP_WAV,
+            TYPEWRITER_SOFT_WAV,
+            BACKSPACE_WAV,
+            RETURN_WAV,
+        ] {
+            let (channels, sample_rate, samples) =
+                decode_pcm_wave(wav).expect("embedded WAV should decode");
+            assert_eq!(channels, 1);
+            assert_eq!(sample_rate, 44_100);
+            assert!(samples.len() > 3_000);
+            assert!(samples.iter().any(|sample| sample.abs() > 0.25));
+        }
+    }
+
+    #[test]
+    fn key_and_backspace_use_distinct_recordings() {
+        let (_, _, key) = decode_pcm_wave(TYPEWRITER_WAV).expect("key WAV should decode");
+        let (_, _, deep) =
+            decode_pcm_wave(TYPEWRITER_DEEP_WAV).expect("deep key WAV should decode");
+        let (_, _, soft) =
+            decode_pcm_wave(TYPEWRITER_SOFT_WAV).expect("soft key WAV should decode");
+        let (_, _, backspace) =
+            decode_pcm_wave(BACKSPACE_WAV).expect("backspace WAV should decode");
+        let (_, _, carriage_return) =
+            decode_pcm_wave(RETURN_WAV).expect("return WAV should decode");
+        assert_ne!(key.len(), deep.len());
+        assert_ne!(key.len(), soft.len());
+        assert_ne!(key.len(), backspace.len());
+        assert_ne!(key.len(), carriage_return.len());
+        assert_ne!(
+            &key[..key.len().min(1_000)],
+            &backspace[..key.len().min(1_000)]
+        );
     }
 
     #[test]
     fn invalid_wave_data_is_rejected() {
         assert!(decode_pcm_wave(b"not a wave").is_none());
+    }
+
+    #[test]
+    fn rapid_backspace_requests_are_rate_limited() {
+        let start = Instant::now();
+        assert!(backspace_playback_allowed(None, start));
+        assert!(!backspace_playback_allowed(
+            Some(start),
+            start + BACKSPACE_MIN_INTERVAL - Duration::from_millis(1)
+        ));
+        assert!(backspace_playback_allowed(
+            Some(start),
+            start + BACKSPACE_MIN_INTERVAL
+        ));
     }
 }
