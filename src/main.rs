@@ -11,6 +11,7 @@ mod input;
 mod renderer;
 mod ui;
 
+use std::ffi::OsString;
 use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -25,11 +26,25 @@ use renderer::{draw, TerminalGuard};
 use ui::{FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, SoundSettings, Theme};
 
 fn main() -> io::Result<()> {
+    let path = match parse_startup_args(std::env::args_os().skip(1).collect()) {
+        Ok(StartupRequest::Edit(path)) => path,
+        Ok(StartupRequest::Help) => {
+            print_help();
+            return Ok(());
+        }
+        Ok(StartupRequest::Version) => {
+            println!("tadak {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        Err(message) => {
+            eprintln!("tadak: {message}\nTry 'tadak --help' for more information.");
+            std::process::exit(2);
+        }
+    };
     let mut cfg = Config::load();
-    let path = std::env::args().nth(1);
 
     let mut editor = match &path {
-        Some(p) => Editor::open(p)?,
+        Some(path) => Editor::open(path)?,
         None => Editor::new(),
     };
 
@@ -109,6 +124,47 @@ fn main() -> io::Result<()> {
     editor.flush();
     let _ = cfg.save();
     Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum StartupRequest {
+    Edit(Option<PathBuf>),
+    Help,
+    Version,
+}
+
+fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
+    match args.as_slice() {
+        [] => Ok(StartupRequest::Edit(None)),
+        [flag] if flag == "-h" || flag == "--help" => Ok(StartupRequest::Help),
+        [flag] if flag == "-V" || flag == "--version" => Ok(StartupRequest::Version),
+        [separator, path] if separator == "--" => {
+            Ok(StartupRequest::Edit(Some(PathBuf::from(path))))
+        }
+        [path] if path.to_string_lossy().starts_with('-') => {
+            Err(format!("unknown option '{}'", path.to_string_lossy()))
+        }
+        [path] => Ok(StartupRequest::Edit(Some(PathBuf::from(path)))),
+        _ => Err("expected at most one filename".to_string()),
+    }
+}
+
+fn print_help() {
+    println!(
+        "Tadak {version} — distraction-free terminal writing
+
+Usage: tadak [FILE]
+
+Arguments:
+  [FILE]           Open a document, or create it when first saved
+
+Options:
+  -h, --help       Show this help
+  -V, --version    Show the installed version
+
+Inside Tadak, press F1 for editing shortcuts and input guidance.",
+        version = env!("CARGO_PKG_VERSION")
+    );
 }
 
 struct UiState {
@@ -433,12 +489,46 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn args(values: &[&str]) -> Vec<OsString> {
+        values.iter().map(OsString::from).collect()
+    }
+
     fn unique_path(name: &str) -> PathBuf {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after the Unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("tadak-{name}-{}-{nonce}", std::process::id()))
+    }
+
+    #[test]
+    fn startup_arguments_support_help_version_and_one_document() {
+        assert_eq!(
+            parse_startup_args(args(&[])),
+            Ok(StartupRequest::Edit(None))
+        );
+        assert_eq!(
+            parse_startup_args(args(&["--help"])),
+            Ok(StartupRequest::Help)
+        );
+        assert_eq!(
+            parse_startup_args(args(&["-V"])),
+            Ok(StartupRequest::Version)
+        );
+        assert_eq!(
+            parse_startup_args(args(&["memo.md"])),
+            Ok(StartupRequest::Edit(Some(PathBuf::from("memo.md"))))
+        );
+        assert_eq!(
+            parse_startup_args(args(&["--", "-draft.md"])),
+            Ok(StartupRequest::Edit(Some(PathBuf::from("-draft.md"))))
+        );
+    }
+
+    #[test]
+    fn startup_arguments_reject_unknown_options_and_extra_paths() {
+        assert!(parse_startup_args(args(&["--unknown"])).is_err());
+        assert!(parse_startup_args(args(&["one.md", "two.md"])).is_err());
     }
 
     #[test]
