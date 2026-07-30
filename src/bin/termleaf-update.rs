@@ -7,10 +7,10 @@ use std::{
     process::{Command, Stdio},
 };
 
-const REPOSITORY: &str = "https://github.com/andy5090/tadak";
-const LATEST_RELEASE_URL: &str = "https://github.com/andy5090/tadak/releases/latest";
+const REPOSITORY: &str = "https://github.com/andy5090/termleaf";
+const LATEST_RELEASE_URL: &str = "https://github.com/andy5090/termleaf/releases/latest";
 const LATEST_INSTALLER_URL: &str =
-    "https://github.com/andy5090/tadak/releases/latest/download/tadak-installer.sh";
+    "https://github.com/andy5090/termleaf/releases/latest/download/termleaf-installer.sh";
 
 #[derive(Debug)]
 struct UpdateError(String);
@@ -23,7 +23,7 @@ impl fmt::Display for UpdateError {
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("tadak-update: {error}");
+        eprintln!("termleaf-update: {error}");
         std::process::exit(1);
     }
 }
@@ -35,26 +35,26 @@ fn run() -> Result<(), UpdateError> {
     let bin_dir = updater_path
         .parent()
         .ok_or_else(|| UpdateError("cannot determine the installation directory".into()))?;
-    let tadak_path = bin_dir.join(executable_name("tadak"));
-    let installed = match installed_version(&tadak_path) {
+    let termleaf_path = bin_dir.join(executable_name("termleaf"));
+    let installed = match installed_version(&termleaf_path) {
         Ok(version) => Some(version),
         Err(_) if force => None,
         Err(error) => return Err(error),
     };
 
-    println!("Checking for Tadak updates...");
+    println!("Checking for Termleaf updates...");
     let latest = latest_version()?;
 
     if !force {
         match installed.as_deref() {
             Some(version) => match compare_versions(version, &latest)? {
                 Ordering::Equal => {
-                    println!("Tadak {latest} is already up to date.");
+                    println!("Termleaf {latest} is already up to date.");
                     return Ok(());
                 }
                 Ordering::Greater => {
                     println!(
-                        "Installed Tadak {version} is newer than the latest published release {latest}."
+                        "Installed Termleaf {version} is newer than the latest published release {latest}."
                     );
                     return Ok(());
                 }
@@ -62,31 +62,32 @@ fn run() -> Result<(), UpdateError> {
             },
             None => {
                 return Err(UpdateError(
-                    "cannot determine the installed Tadak version; use --force to repair it".into(),
+                    "cannot determine the installed Termleaf version; use --force to repair it"
+                        .into(),
                 ));
             }
         }
     }
 
     if force {
-        println!("Reinstalling Tadak {latest}...");
+        println!("Reinstalling Termleaf {latest}...");
     } else {
         println!(
-            "Updating Tadak {} -> {latest}...",
+            "Updating Termleaf {} -> {latest}...",
             installed.as_deref().unwrap_or("unknown")
         );
     }
 
     install_latest(bin_dir)?;
 
-    let updated = installed_version(&tadak_path)?;
+    let updated = installed_version(&termleaf_path)?;
     if updated != latest {
         return Err(UpdateError(format!(
-            "the installer completed, but {tadak_path:?} reports {updated}; expected {latest}"
+            "the installer completed, but {termleaf_path:?} reports {updated}; expected {latest}"
         )));
     }
 
-    println!("Tadak {updated} installed successfully.");
+    println!("Termleaf {updated} installed successfully.");
     Ok(())
 }
 
@@ -97,8 +98,8 @@ fn parse_args() -> Result<bool, UpdateError> {
             "--force" => force = true,
             "-h" | "--help" => {
                 println!(
-                    "Update Tadak to the latest GitHub release.\n\n\
-                     Usage: tadak-update [OPTIONS]\n\n\
+                    "Update Termleaf to the latest GitHub release.\n\n\
+                     Usage: termleaf-update [OPTIONS]\n\n\
                      Options:\n  \
                        --force       Reinstall even when the installed version is current\n  \
                      -h, --help     Print help\n  \
@@ -107,12 +108,12 @@ fn parse_args() -> Result<bool, UpdateError> {
                 std::process::exit(0);
             }
             "-V" | "--version" => {
-                println!("tadak-update {}", env!("CARGO_PKG_VERSION"));
+                println!("termleaf-update {}", env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
             }
             unknown => {
                 return Err(UpdateError(format!(
-                    "unknown option {unknown:?}; run tadak-update --help"
+                    "unknown option {unknown:?}; run termleaf-update --help"
                 )));
             }
         }
@@ -120,25 +121,25 @@ fn parse_args() -> Result<bool, UpdateError> {
     Ok(force)
 }
 
-fn installed_version(tadak_path: &Path) -> Result<String, UpdateError> {
-    let output = Command::new(tadak_path)
+fn installed_version(termleaf_path: &Path) -> Result<String, UpdateError> {
+    let output = Command::new(termleaf_path)
         .arg("--version")
         .output()
         .map_err(|error| {
             UpdateError(format!(
-                "cannot run installed Tadak at {tadak_path:?}: {error}; use --force to repair the installation"
+                "cannot run installed Termleaf at {termleaf_path:?}: {error}; use --force to repair the installation"
             ))
         })?;
 
     if !output.status.success() {
         return Err(UpdateError(format!(
-            "installed Tadak at {tadak_path:?} could not report its version"
+            "installed Termleaf at {termleaf_path:?} could not report its version"
         )));
     }
 
     let output = String::from_utf8(output.stdout)
-        .map_err(|_| UpdateError("installed Tadak returned a non-UTF-8 version".into()))?;
-    parse_tadak_version(&output)
+        .map_err(|_| UpdateError("installed Termleaf returned a non-UTF-8 version".into()))?;
+    parse_termleaf_version(&output)
 }
 
 fn latest_version() -> Result<String, UpdateError> {
@@ -233,12 +234,12 @@ fn executable_name(name: &str) -> PathBuf {
     }
 }
 
-fn parse_tadak_version(output: &str) -> Result<String, UpdateError> {
+fn parse_termleaf_version(output: &str) -> Result<String, UpdateError> {
     let mut fields = output.split_whitespace();
     match (fields.next(), fields.next(), fields.next()) {
-        (Some("tadak"), Some(version), None) if !version.is_empty() => Ok(version.to_owned()),
+        (Some("termleaf"), Some(version), None) if !version.is_empty() => Ok(version.to_owned()),
         _ => Err(UpdateError(format!(
-            "unexpected Tadak version output: {:?}",
+            "unexpected Termleaf version output: {:?}",
             output.trim()
         ))),
     }
@@ -282,7 +283,7 @@ fn parse_version_numbers(version: &str) -> Result<(u64, u64, u64), UpdateError> 
         ),
         _ => {
             return Err(UpdateError(format!(
-                "unsupported Tadak version format: {version:?}"
+                "unsupported Termleaf version format: {version:?}"
             )));
         }
     };
@@ -290,7 +291,7 @@ fn parse_version_numbers(version: &str) -> Result<(u64, u64, u64), UpdateError> 
     match parsed {
         (Ok(major), Ok(minor), Ok(patch)) => Ok((major, minor, patch)),
         _ => Err(UpdateError(format!(
-            "unsupported Tadak version format: {version:?}"
+            "unsupported Termleaf version format: {version:?}"
         ))),
     }
 }
@@ -301,20 +302,20 @@ mod tests {
 
     #[test]
     fn parses_installed_version() {
-        assert_eq!(parse_tadak_version("tadak 0.1.2\n").unwrap(), "0.1.2");
-        assert!(parse_tadak_version("tadak\n").is_err());
-        assert!(parse_tadak_version("other 0.1.2\n").is_err());
+        assert_eq!(parse_termleaf_version("termleaf 0.2.0\n").unwrap(), "0.2.0");
+        assert!(parse_termleaf_version("termleaf\n").is_err());
+        assert!(parse_termleaf_version("other 0.2.0\n").is_err());
     }
 
     #[test]
     fn parses_only_the_expected_release_url() {
         assert_eq!(
-            parse_release_version("https://github.com/andy5090/tadak/releases/tag/v0.1.3\n")
+            parse_release_version("https://github.com/andy5090/termleaf/releases/tag/v0.2.0\n")
                 .unwrap(),
-            "0.1.3"
+            "0.2.0"
         );
         assert!(parse_release_version(
-            "https://github.com/someone-else/tadak/releases/tag/v99.0.0"
+            "https://github.com/someone-else/termleaf/releases/tag/v99.0.0"
         )
         .is_err());
     }
@@ -322,10 +323,10 @@ mod tests {
     #[test]
     fn derives_cargo_home_from_bin_directory() {
         assert_eq!(
-            cargo_home_for(Path::new("/tmp/tadak-home/bin")),
-            Some(Path::new("/tmp/tadak-home"))
+            cargo_home_for(Path::new("/tmp/termleaf-home/bin")),
+            Some(Path::new("/tmp/termleaf-home"))
         );
-        assert_eq!(cargo_home_for(Path::new("/tmp/tadak-home")), None);
+        assert_eq!(cargo_home_for(Path::new("/tmp/termleaf-home")), None);
     }
 
     #[test]

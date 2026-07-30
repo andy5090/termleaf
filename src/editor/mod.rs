@@ -417,7 +417,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after the Unix epoch")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("tadak-test-{}-{unique}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("termleaf-test-{}-{unique}", std::process::id()));
         let path = root.join("nested").join("note.txt");
 
         let mut editor = Editor::open(&path).expect("a missing document should open empty");
@@ -440,7 +441,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after the Unix epoch")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("tadak-save-as-{unique}"));
+        let root = std::env::temp_dir().join(format!("termleaf-save-as-{unique}"));
         let path = root.join("chosen.txt");
 
         let mut editor = Editor::new();

@@ -1,6 +1,6 @@
-# Releasing Tadak
+# Releasing Termleaf
 
-Tadak follows Semantic Versioning:
+Termleaf follows Semantic Versioning:
 
 - Patch (`0.1.1`): compatible bug fixes and small polish.
 - Minor (`0.2.0`): compatible features or meaningful behavior additions.
@@ -29,7 +29,7 @@ Tadak follows Semantic Versioning:
 Create and push a tag that exactly matches the Cargo package version:
 
 ```bash
-git tag -a v0.2.0 -m "Tadak 0.2.0"
+git tag -a v0.2.0 -m "Termleaf 0.2.0"
 git push origin v0.2.0
 ```
 
@@ -40,8 +40,8 @@ After it finishes, verify:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/andy5090/tadak/releases/latest/download/tadak-installer.sh | sh
-tadak --version
+  https://github.com/andy5090/termleaf/releases/latest/download/termleaf-installer.sh | sh
+termleaf --version
 ```
 
 Do not move or recreate a published version tag. If a release needs a fix,

@@ -12,7 +12,7 @@ pub const MAX_FONT: u16 = 5;
 /// Runtime configuration for the app.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Whether Tadak's optional live two-set composer handles ASCII keys.
+    /// Whether Termleaf's optional live two-set composer handles ASCII keys.
     /// When false, input is left entirely to the operating-system IME.
     pub live_composition: bool,
     /// Focus mode hides the status bar and other chrome.
@@ -33,7 +33,7 @@ pub struct Config {
     pub theme: String,
     /// Interface language (`en` or `ko`).
     pub language: String,
-    /// Show the welcome/help overlay when Tadak starts.
+    /// Show the welcome/help overlay when Termleaf starts.
     pub show_welcome: bool,
     /// Autosave interval in seconds; `0` disables autosave.
     pub autosave_secs: u64,
@@ -59,13 +59,13 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Path to the config file (`$HOME/.config/tadak/config`).
+    /// Path to the config file (`$HOME/.config/termleaf/config`).
     pub fn path() -> Option<PathBuf> {
         let home = std::env::var_os("HOME")?;
         Some(
             PathBuf::from(home)
                 .join(".config")
-                .join("tadak")
+                .join("termleaf")
                 .join("config"),
         )
     }
@@ -148,7 +148,7 @@ impl Config {
 
     fn to_text(&self) -> String {
         format!(
-            "# Tadak configuration\n\
+            "# Termleaf configuration\n\
              live_composition = {}\n\
              focus_mode = {}\n\
              sound = {}\n\

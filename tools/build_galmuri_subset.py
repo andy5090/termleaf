@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Tadak's fixed-width Galmuri9 bitmap subset.
+"""Build Termleaf's fixed-width Galmuri9 bitmap subset.
 
 Each output record contains one advance-width byte followed by ten big-endian
 u16 bitmap rows. Records are ordered as printable ASCII U+0020..U+007E,
@@ -19,7 +19,7 @@ URL = (
     f"v{VERSION}/dist/Galmuri9.bdf"
 )
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "assets" / f"galmuri9-{VERSION}-tadak.bin"
+OUTPUT = ROOT / "assets" / f"galmuri9-{VERSION}-termleaf.bin"
 RANGES = ((0x0020, 0x007E), (0x3131, 0x3163), (0xAC00, 0xD7A3))
 CANVAS_TOP = 8
 CANVAS_BOTTOM = -1

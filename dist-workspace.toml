@@ -12,7 +12,7 @@ targets = [
 ]
 install-path = "CARGO_HOME"
 hosting = "github"
-# Tadak ships its own updater so version checks use the installed executable,
+# Termleaf ships its own updater so version checks use the installed executable,
 # rather than cargo-dist's receipt metadata.
 install-updater = false
 

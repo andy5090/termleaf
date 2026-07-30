@@ -1,6 +1,6 @@
 //! Galmuri9-backed bitmap glyphs for the enlarged focus zone.
 //!
-//! Tadak embeds a converted subset of Galmuri9 2.40.4 containing printable
+//! Termleaf embeds a converted subset of Galmuri9 2.40.4 containing printable
 //! ASCII, Hangul Compatibility Jamo, and all 11,172 precomposed Hangul
 //! syllables. Glyphs share a 10-row baseline-aware canvas while retaining
 //! their original advance widths.
@@ -8,7 +8,7 @@
 //! The subset is licensed under the SIL Open Font License 1.1; see
 //! `THIRD_PARTY_LICENSES.md` and `assets/OFL-1.1.txt`.
 
-const FONT_DATA: &[u8] = include_bytes!("../../assets/galmuri9-2.40.4-tadak.bin");
+const FONT_DATA: &[u8] = include_bytes!("../../assets/galmuri9-2.40.4-termleaf.bin");
 const ROWS_PER_GLYPH: usize = 10;
 const BYTES_PER_GLYPH: usize = 1 + ROWS_PER_GLYPH * 2;
 
@@ -44,7 +44,7 @@ impl Glyph {
 }
 
 /// Look up a glyph, falling back to an outlined replacement box for code
-/// points outside Tadak's embedded subset.
+/// points outside Termleaf's embedded subset.
 pub fn glyph_for(c: char) -> Glyph {
     glyph_index(c)
         .map(decode_glyph)

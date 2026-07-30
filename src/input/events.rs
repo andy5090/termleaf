@@ -39,7 +39,7 @@ pub enum Action {
 }
 
 /// Translate a key event into an [`Action`]. `live_composition` opts into
-/// Tadak's raw two-set mapping; otherwise all text is left to the OS IME.
+/// Termleaf's raw two-set mapping; otherwise all text is left to the OS IME.
 pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 

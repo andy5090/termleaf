@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Tadak's mechanical key, delete, and carriage-return sounds."""
+"""Generate Termleaf's optional key, delete, and carriage-return sounds."""
 
 from __future__ import annotations
 

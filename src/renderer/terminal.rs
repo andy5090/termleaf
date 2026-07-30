@@ -382,14 +382,14 @@ fn draw_help(
 
     let korean = cfg.language == "ko";
     let title = match (help.welcome, korean) {
-        (true, false) => "Welcome to Tadak",
-        (false, false) => "Tadak Help",
-        (true, true) => "타닥에 오신 것을 환영합니다",
-        (false, true) => "타닥 도움말",
+        (true, false) => "Welcome to Termleaf",
+        (false, false) => "Termleaf Help",
+        (true, true) => "Termleaf에 오신 것을 환영합니다",
+        (false, true) => "Termleaf 도움말",
     };
     let lines = if korean {
         vec![
-            "타닥은 두 가지 한글 입력 방식을 제공합니다.",
+            "Termleaf는 두 가지 한글 입력 방식을 제공합니다.",
             "IME:OS(기본) — Linux 한/영 키 사용, 완성된 음절만 표시",
             "F2 직접 한글 — OS 입력을 영문으로 두면 ㅎ → 하 → 한 표시",
             "",
@@ -400,7 +400,7 @@ fn draw_help(
         ]
     } else {
         vec![
-            "Tadak supports two Korean input paths.",
+            "Termleaf supports two Korean input paths.",
             "IME:OS (default) — use Linux input switching; final syllables only",
             "F2 Live Korean — keep OS input English to see ㅎ → 하 → 한",
             "",

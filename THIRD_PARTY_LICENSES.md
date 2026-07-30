@@ -2,7 +2,7 @@
 
 ## Galmuri9 2.40.4
 
-Tadak includes a converted subset of Galmuri9 containing printable ASCII,
+Termleaf includes a converted subset of Galmuri9 containing printable ASCII,
 Hangul Compatibility Jamo, and all 11,172 precomposed Hangul syllables.
 
 Copyright © 2019–2025 Lee Minseo (quiple@quiple.dev)

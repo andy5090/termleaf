@@ -258,7 +258,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after the Unix epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("tadak-picker-{}-{nonce}", std::process::id()))
+        std::env::temp_dir().join(format!("termleaf-picker-{}-{nonce}", std::process::id()))
     }
 
     #[test]

@@ -1,22 +1,22 @@
 [package]
-name = "tadak"
-version = "0.1.3"
+name = "termleaf"
+version = "0.2.0"
 edition = "2021"
-description = "A distraction-free terminal writing app with big pixel fonts, a mechanical-typewriter feel, and live Hangul (Korean) jamo-by-jamo composition."
-repository = "https://github.com/andy5090/tadak"
-homepage = "https://github.com/andy5090/tadak"
+description = "A distraction-free terminal text editor built for focused writing."
+repository = "https://github.com/andy5090/termleaf"
+homepage = "https://github.com/andy5090/termleaf"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["terminal", "writing", "hangul", "korean", "tui"]
 categories = ["command-line-utilities", "text-editors"]
 
 [[bin]]
-name = "tadak"
+name = "termleaf"
 path = "src/main.rs"
 
 [[bin]]
-name = "tadak-update"
-path = "src/bin/tadak-update.rs"
+name = "termleaf-update"
+path = "src/bin/termleaf-update.rs"
 
 [dependencies]
 crossterm = "0.28"

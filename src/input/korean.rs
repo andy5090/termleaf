@@ -2,7 +2,7 @@
 //!
 //! Implements a 2-set (두벌식) keyboard automaton. Instead of relying on the
 //! operating system IME — which usually hands the terminal only the final,
-//! fully composed syllable — Tadak drives composition itself so it can reveal
+//! fully composed syllable — Termleaf drives composition itself so it can reveal
 //! the *process*: the lead consonant, then the vowel, then the tail consonant
 //! appearing one jamo at a time (예: ㅎ → 하 → 한).
 //!

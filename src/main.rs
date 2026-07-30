@@ -1,8 +1,8 @@
-//! Tadak (타닥) — a distraction-free terminal writing app.
+//! Termleaf — a distraction-free terminal text editor built for focused writing.
 //!
-//! Big pixel fonts, a mechanical-typewriter feel, and live Hangul jamo-by-jamo
-//! composition. Rendering is ANSI-only (via crossterm) for broad terminal
-//! compatibility.
+//! It provides optional big pixel text, sound themes, and live Hangul
+//! jamo-by-jamo composition. Rendering is ANSI-only (via crossterm) for broad
+//! terminal compatibility.
 
 mod audio;
 mod config;
@@ -33,11 +33,11 @@ fn main() -> io::Result<()> {
             return Ok(());
         }
         Ok(StartupRequest::Version) => {
-            println!("tadak {}", env!("CARGO_PKG_VERSION"));
+            println!("termleaf {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         Err(message) => {
-            eprintln!("tadak: {message}\nTry 'tadak --help' for more information.");
+            eprintln!("termleaf: {message}\nTry 'termleaf --help' for more information.");
             std::process::exit(2);
         }
     };
@@ -151,9 +151,9 @@ fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
 
 fn print_help() {
     println!(
-        "Tadak {version} — distraction-free terminal writing
+        "Termleaf {version} — focused writing in the terminal
 
-Usage: tadak [FILE]
+Usage: termleaf [FILE]
 
 Arguments:
   [FILE]           Open a document, or create it when first saved
@@ -162,7 +162,7 @@ Options:
   -h, --help       Show this help
   -V, --version    Show the installed version
 
-Inside Tadak, press F1 for editing shortcuts and input guidance.",
+Inside Termleaf, press F1 for editing shortcuts and input guidance.",
         version = env!("CARGO_PKG_VERSION")
     );
 }
@@ -498,7 +498,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after the Unix epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("tadak-{name}-{}-{nonce}", std::process::id()))
+        std::env::temp_dir().join(format!("termleaf-{name}-{}-{nonce}", std::process::id()))
     }
 
     #[test]

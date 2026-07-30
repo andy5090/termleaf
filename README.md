@@ -1,27 +1,32 @@
-# Tadak (타닥)
+# Termleaf
 
-A distraction-free **terminal writing app** written in Rust — big pixel fonts, a
-mechanical-typewriter feel, and **live Hangul composition** that shows each
-jamo assembling one piece at a time (예: `ㅎ` → `하` → `한`).
+A distraction-free **terminal text editor built for focused writing**.
+Termleaf keeps files, shortcuts, and the writing surface close while leaving
+the rest of the desktop out of the way.
 
-The name comes from the Korean onomatopoeia *타닥타닥* — the clatter of keys.
+> Just you, your words, and the terminal.
 
-[![CI](https://github.com/andy5090/tadak/actions/workflows/ci.yml/badge.svg)](https://github.com/andy5090/tadak/actions/workflows/ci.yml)
+[![CI](https://github.com/andy5090/termleaf/actions/workflows/ci.yml/badge.svg)](https://github.com/andy5090/termleaf/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-> Status: v0.1 — a working foundation. Rendering is ANSI-only (via
+> Status: v0.2 — a working foundation. Rendering is ANSI-only (via
 > [`crossterm`](https://crates.io/crates/crossterm)) so it runs on virtually any
 > terminal.
 
 ## Why
 
-Most terminals hand applications only the *finished* Hangul syllable, hiding
-the composition. Tadak normally respects the operating-system IME, but offers
-an optional live 2-set (두벌식) composer that puts the process front and center
-in the big-pixel focus zone.
+General-purpose editors are excellent at managing code and complex projects,
+but their panels, modes, and notifications can compete with the act of
+writing. Termleaf is deliberately narrower: open a plain-text document, focus
+on the words, and save without leaving the terminal.
 
 ## Features
 
+- **Focus mode** — hides all chrome so only your words remain.
+- **Open and save in-app** — choose a filename on first save, reopen another
+  document, or save under a new name without leaving Termleaf.
+- **Save & autosave** — plain-text documents (`.md` by default), with
+  time-based autosave.
 - **Big pixel font zone** — a short cursor-side phrase is drawn with
   [Galmuri9](https://quiple.dev/font/galmuri) pixels, including complete Hangul
   and distinct Latin uppercase/lowercase glyphs.
@@ -29,22 +34,15 @@ in the big-pixel focus zone.
   character slot evolve in place as `ㅎ` → `하` → `한`, matching normal Hangul,
   including complex vowels (ㅘ, ㅢ …), double tails (ㄳ, ㄺ …), and the ghost
   rule (닭 + ㅏ → 달가).
-- **Mechanical feel** — choose `classic`, `deep`, or `soft` built-in typewriter
-  strikes; deletion uses a short, gentle, rate-limited release, while Enter
-  plays a brief lever contact followed by the carriage stop and a high margin
-  bell. Master, deletion, and return effects can be controlled independently
-  without blocking input.
-- **Open and save in-app** — choose a filename on first save, reopen another
-  document, or save under a new name without leaving Tadak.
-- **Focus mode** — hides all chrome so only your words remain.
 - **Themes** — `paper`, true-black `night`, phosphor-green `xt`, and `amber`.
 - **English or Korean UI** — guidance defaults to English and toggles in-app;
   the last language, theme, sound, and display choices are restored on launch.
 - **Built-in guidance** — the startup guide explains OS vs. Live Korean input;
   its “Don’t show again” checkbox is optional, and `F1` always reopens the full
   shortcut reference.
-- **Save & autosave** — plain-text documents (`.md` by default), with
-  time-based autosave.
+- **Optional writing ambience** — choose `classic`, `deep`, or `soft` key
+  sounds, with independently configurable delete and return effects. Audio can
+  be disabled completely.
 - **Small footprint** — direct dependencies are `crossterm` and `rodio`.
 
 ## Install
@@ -52,52 +50,51 @@ in the big-pixel focus zone.
 ### macOS and Linux (recommended)
 
 The installer detects Apple Silicon, Intel macOS, or x86_64 Linux, verifies the
-release archive, and installs `tadak` into Cargo's conventional binary
+release archive, and installs `termleaf` into Cargo's conventional binary
 directory:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/andy5090/tadak/releases/latest/download/tadak-installer.sh | sh
+  https://github.com/andy5090/termleaf/releases/latest/download/termleaf-installer.sh | sh
 ```
 
 Open a new terminal if the installer updates your `PATH`, then run:
 
 ```bash
-tadak
-tadak memo.md
-tadak --help
+termleaf
+termleaf memo.md
+termleaf --help
 ```
 
 Prebuilt archives and checksums are also available from the
-[latest GitHub release](https://github.com/andy5090/tadak/releases/latest).
+[latest GitHub release](https://github.com/andy5090/termleaf/releases/latest).
 Release history is maintained in the [changelog](CHANGELOG.md).
 
 ### Update or uninstall
 
 Existing curl installations can always be updated by running the installation
-command again. Releases after `v0.1.0` also install a small updater. From
-`v0.1.3`, it compares the latest release with the version reported by the
-installed Tadak executable instead of relying on installer metadata:
+command again. The installer also includes an updater that compares the latest
+release with the version reported by the installed Termleaf executable:
 
 ```bash
-tadak-update
+termleaf-update
 ```
 
 To repair an incomplete installation or reinstall the current release:
 
 ```bash
-tadak-update --force
+termleaf-update --force
 ```
 
 To uninstall a curl installation, first print the exact installed paths:
 
 ```bash
-command -v tadak
-command -v tadak-update
+command -v termleaf
+command -v termleaf-update
 ```
 
 Remove only the files printed by those commands. The default paths are
-`$HOME/.cargo/bin/tadak` and `$HOME/.cargo/bin/tadak-update`. Keep Cargo's
+`$HOME/.cargo/bin/termleaf` and `$HOME/.cargo/bin/termleaf-update`. Keep Cargo's
 shared `env`/`env.fish` files and the directory's `PATH` entry if other Cargo
 tools are installed there.
 
@@ -105,19 +102,19 @@ Package-manager installations should be managed by the same package manager:
 
 ```bash
 # Future Homebrew package
-brew upgrade tadak
-brew uninstall tadak
+brew upgrade termleaf
+brew uninstall termleaf
 
 # Cargo installation
-cargo install tadak --locked
-cargo uninstall tadak
+cargo install termleaf --locked
+cargo uninstall termleaf
 ```
 
 ### Build from source
 
 ```bash
-git clone https://github.com/andy5090/tadak.git
-cd tadak
+git clone https://github.com/andy5090/termleaf.git
+cd termleaf
 cargo install --path . --locked
 ```
 
@@ -132,7 +129,7 @@ release artifacts.
 | --- | --- |
 | typing | insert text from the operating-system input method |
 | `F1` | open the help and startup-guide settings |
-| `F2` | toggle Tadak's optional `Live Korean` composer |
+| `F2` | toggle Termleaf's optional `Live Korean` composer |
 | `F3` | toggle focus mode |
 | `F4` | toggle the big-font zone |
 | `F5` | toggle system-audio keystroke sound |
@@ -164,20 +161,20 @@ the document or enter a directory. Typing filters the list by filename.
 ## Typing Korean
 
 By default the status bar shows `IME:OS`; use the normal Linux/desktop 한/영
-shortcut and Tadak accepts the committed Korean text from that IME. No Tadak
+shortcut and Termleaf accepts the committed Korean text from that IME. No Termleaf
 shortcut is required.
 
 `F2` toggles the optional `Live Korean` (`IME:LIVE`) practice mode; it is not
-the operating system's 한/영 switch. In this mode Tadak maps raw English-layout keys using standard
+the operating system's 한/영 switch. In this mode Termleaf maps raw English-layout keys using standard
 **두벌식**, e.g. `g k s` → **한**. The big zone updates one character slot in
 place as `ㅎ` → `하` → `한`, and `Backspace` disassembles that same cluster one
 step at a time. Set the OS keyboard to English while using `IME:LIVE`, since
-Tadak needs the raw Latin key events to expose each intermediate step.
+Termleaf needs the raw Latin key events to expose each intermediate step.
 
 You can also open a document directly from the shell:
 
 ```bash
-tadak memo.txt
+termleaf memo.txt
 ```
 
 An existing path is loaded; a missing path becomes a new document that will be
@@ -185,7 +182,7 @@ created there on save.
 
 ## Configuration
 
-Settings live at `~/.config/tadak/config` (a simple `key = value` file), written
+Settings live at `~/.config/termleaf/config` (a simple `key = value` file), written
 on exit and editable by hand:
 
 ```
@@ -223,7 +220,7 @@ src/
 └── config/        # settings load/save
 ```
 
-## v0.1 scope notes
+## v0.2 scope notes
 
 - The big-font view follows up to 12 characters around the cursor and trims the
   oldest characters to fit the current terminal width.
