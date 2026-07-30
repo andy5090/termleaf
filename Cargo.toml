@@ -1,6 +1,6 @@
 [package]
 name = "tadak"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "A distraction-free terminal writing app with big pixel fonts, a mechanical-typewriter feel, and live Hangul (Korean) jamo-by-jamo composition."
 repository = "https://github.com/andy5090/tadak"
@@ -13,6 +13,10 @@ categories = ["command-line-utilities", "text-editors"]
 [[bin]]
 name = "tadak"
 path = "src/main.rs"
+
+[[bin]]
+name = "tadak-update"
+path = "src/bin/tadak-update.rs"
 
 [dependencies]
 crossterm = "0.28"

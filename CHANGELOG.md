@@ -7,6 +7,16 @@ and Tadak uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-30
+
+### Fixed
+
+- Replaced the receipt-based generated updater with a Tadak updater that checks
+  the version reported by the installed `tadak` executable, preventing stale
+  install metadata from hiding an available release.
+- Added `tadak-update --force` to repair or reinstall the current release when
+  the installed executable and its metadata are out of sync.
+
 ## [0.1.2] - 2026-07-30
 
 ### Changed
@@ -49,7 +59,8 @@ and Tadak uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/tadak/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/andy5090/tadak/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/andy5090/tadak/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/andy5090/tadak/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/andy5090/tadak/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/andy5090/tadak/releases/tag/v0.1.0

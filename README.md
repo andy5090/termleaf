@@ -75,10 +75,18 @@ Release history is maintained in the [changelog](CHANGELOG.md).
 ### Update or uninstall
 
 Existing curl installations can always be updated by running the installation
-command again. Releases after `v0.1.0` also install a small updater:
+command again. Releases after `v0.1.0` also install a small updater. From
+`v0.1.3`, it compares the latest release with the version reported by the
+installed Tadak executable instead of relying on installer metadata:
 
 ```bash
 tadak-update
+```
+
+To repair an incomplete installation or reinstall the current release:
+
+```bash
+tadak-update --force
 ```
 
 To uninstall a curl installation, first print the exact installed paths:
