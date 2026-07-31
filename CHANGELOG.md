@@ -7,6 +7,18 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-08-01
+
+### Fixed
+
+- Replaced the synthetic typewriter effects with compact, edited CC0 field
+  recordings of a Hermes Precisa 305 for more natural playback, while removing
+  the low-frequency resonance that sounded like a drum on MacBook speakers.
+- Added four real key-strike variations per sound profile and avoided immediate
+  repeats so sustained typing no longer sounds like one identical sample loop.
+- Added restrained per-strike pitch, level, brightness, and decay variation to
+  make the recorded key differences perceptible without sounding randomized.
+
 ## [0.3.1] - 2026-08-01
 
 ### Changed
@@ -87,7 +99,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/andy5090/termleaf/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/andy5090/termleaf/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/andy5090/termleaf/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/andy5090/termleaf/compare/v0.2.3...v0.2.4

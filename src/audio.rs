@@ -14,9 +14,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const TYPEWRITER_WAV: &[u8] = include_bytes!("../assets/typewriter-key.wav");
-const TYPEWRITER_DEEP_WAV: &[u8] = include_bytes!("../assets/typewriter-key-deep.wav");
-const TYPEWRITER_SOFT_WAV: &[u8] = include_bytes!("../assets/typewriter-key-soft.wav");
+const KEY_VARIANT_COUNT: usize = 4;
+const TYPEWRITER_WAVS: [&[u8]; KEY_VARIANT_COUNT] = [
+    include_bytes!("../assets/typewriter-key.wav"),
+    include_bytes!("../assets/typewriter-key-2.wav"),
+    include_bytes!("../assets/typewriter-key-3.wav"),
+    include_bytes!("../assets/typewriter-key-4.wav"),
+];
+const TYPEWRITER_DEEP_WAVS: [&[u8]; KEY_VARIANT_COUNT] = [
+    include_bytes!("../assets/typewriter-key-deep.wav"),
+    include_bytes!("../assets/typewriter-key-deep-2.wav"),
+    include_bytes!("../assets/typewriter-key-deep-3.wav"),
+    include_bytes!("../assets/typewriter-key-deep-4.wav"),
+];
+const TYPEWRITER_SOFT_WAVS: [&[u8]; KEY_VARIANT_COUNT] = [
+    include_bytes!("../assets/typewriter-key-soft.wav"),
+    include_bytes!("../assets/typewriter-key-soft-2.wav"),
+    include_bytes!("../assets/typewriter-key-soft-3.wav"),
+    include_bytes!("../assets/typewriter-key-soft-4.wav"),
+];
 const BACKSPACE_WAV: &[u8] = include_bytes!("../assets/typewriter-backspace.wav");
 const RETURN_WAV: &[u8] = include_bytes!("../assets/typewriter-return.wav");
 const BACKSPACE_MIN_INTERVAL: Duration = Duration::from_millis(55);
@@ -34,11 +50,13 @@ struct Clip {
 pub struct SoundPlayer {
     stream: RefCell<Option<MixerDeviceSink>>,
     stream_healthy: Arc<AtomicBool>,
-    classic_key: Clip,
-    deep_key: Clip,
-    soft_key: Clip,
+    classic_keys: [Clip; KEY_VARIANT_COUNT],
+    deep_keys: [Clip; KEY_VARIANT_COUNT],
+    soft_keys: [Clip; KEY_VARIANT_COUNT],
     backspace: Clip,
     carriage_return: Clip,
+    key_variant_state: Cell<u32>,
+    last_key_variant: Cell<Option<usize>>,
     last_backspace: Cell<Option<Instant>>,
     last_stream_retry: Cell<Option<Instant>>,
 }
@@ -51,11 +69,13 @@ impl SoundPlayer {
         Self {
             stream: RefCell::new(stream),
             stream_healthy,
-            classic_key: Clip::decode(TYPEWRITER_WAV),
-            deep_key: Clip::decode(TYPEWRITER_DEEP_WAV),
-            soft_key: Clip::decode(TYPEWRITER_SOFT_WAV),
+            classic_keys: TYPEWRITER_WAVS.map(Clip::decode),
+            deep_keys: TYPEWRITER_DEEP_WAVS.map(Clip::decode),
+            soft_keys: TYPEWRITER_SOFT_WAVS.map(Clip::decode),
             backspace: Clip::decode(BACKSPACE_WAV),
             carriage_return: Clip::decode(RETURN_WAV),
+            key_variant_state: Cell::new(0x7A_DA_C0_DE),
+            last_key_variant: Cell::new(None),
             last_backspace: Cell::new(None),
             last_stream_retry: Cell::new(None),
         }
@@ -63,12 +83,16 @@ impl SoundPlayer {
 
     /// Mix one printing-key strike immediately.
     pub fn play_key(&self, profile: &str) {
-        let clip = match profile {
-            "deep" => &self.deep_key,
-            "soft" => &self.soft_key,
-            _ => &self.classic_key,
+        let clips = match profile {
+            "deep" => &self.deep_keys,
+            "soft" => &self.soft_keys,
+            _ => &self.classic_keys,
         };
-        self.play(clip);
+        let (state, variant) =
+            next_key_variant(self.key_variant_state.get(), self.last_key_variant.get());
+        self.key_variant_state.set(state);
+        self.last_key_variant.set(Some(variant));
+        self.play(&clips[variant]);
     }
 
     /// Mix the separate, gentle delete-key release effect.
@@ -169,6 +193,15 @@ fn backspace_playback_allowed(last: Option<Instant>, now: Instant) -> bool {
     last.is_none_or(|last| now.duration_since(last) >= BACKSPACE_MIN_INTERVAL)
 }
 
+fn next_key_variant(state: u32, last: Option<usize>) -> (u32, usize) {
+    let state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+    let mut variant = ((state >> 16) as usize) % KEY_VARIANT_COUNT;
+    if last == Some(variant) {
+        variant = (variant + 1 + (state as usize & 1)) % KEY_VARIANT_COUNT;
+    }
+    (state, variant)
+}
+
 fn stream_retry_allowed(last: Option<Instant>, now: Instant) -> bool {
     last.is_none_or(|last| now.duration_since(last) >= STREAM_RETRY_INTERVAL)
 }
@@ -224,35 +257,100 @@ fn decode_pcm_wave(wav: &[u8]) -> Option<(u16, u32, Vec<f32>)> {
 mod tests {
     use super::*;
 
+    fn embedded_wavs() -> Vec<&'static [u8]> {
+        TYPEWRITER_WAVS
+            .into_iter()
+            .chain(TYPEWRITER_DEEP_WAVS)
+            .chain(TYPEWRITER_SOFT_WAVS)
+            .chain([BACKSPACE_WAV, RETURN_WAV])
+            .collect()
+    }
+
     fn rms(samples: &[f32]) -> f32 {
         (samples.iter().map(|sample| sample * sample).sum::<f32>() / samples.len() as f32).sqrt()
     }
 
+    fn tone_power(samples: &[f32], sample_rate: u32, frequency: f32) -> f64 {
+        let (real, imaginary) =
+            samples
+                .iter()
+                .enumerate()
+                .fold((0.0, 0.0), |(real, imaginary), (index, sample)| {
+                    let phase = std::f64::consts::TAU * frequency as f64 * index as f64
+                        / sample_rate as f64;
+                    (
+                        real + *sample as f64 * phase.cos(),
+                        imaginary + *sample as f64 * phase.sin(),
+                    )
+                });
+        (real * real + imaginary * imaginary) / (samples.len() * samples.len()) as f64
+    }
+
+    fn band_power(samples: &[f32], sample_rate: u32, frequencies: &[f32]) -> f64 {
+        frequencies
+            .iter()
+            .map(|frequency| tone_power(samples, sample_rate, *frequency))
+            .sum()
+    }
+
     #[test]
     fn embedded_typewriter_sound_is_valid_pcm() {
-        for wav in [
-            TYPEWRITER_WAV,
-            TYPEWRITER_DEEP_WAV,
-            TYPEWRITER_SOFT_WAV,
-            BACKSPACE_WAV,
-            RETURN_WAV,
-        ] {
+        for wav in embedded_wavs() {
             let (channels, sample_rate, samples) =
                 decode_pcm_wave(wav).expect("embedded WAV should decode");
             assert_eq!(channels, 1);
             assert_eq!(sample_rate, 44_100);
-            assert!(samples.len() > 3_000);
-            assert!(samples.iter().any(|sample| sample.abs() > 0.25));
+            assert!(samples.len() > 2_500);
+            assert!(samples.iter().any(|sample| sample.abs() > 0.2));
         }
     }
 
     #[test]
-    fn key_and_backspace_use_distinct_recordings() {
-        let (_, _, key) = decode_pcm_wave(TYPEWRITER_WAV).expect("key WAV should decode");
+    fn classic_keys_keep_a_short_recorded_decay() {
+        for wav in TYPEWRITER_WAVS {
+            let (_, sample_rate, samples) = decode_pcm_wave(wav).expect("key WAV should decode");
+            let duration = samples.len() as f32 / sample_rate as f32;
+            let section = |start: f32, end: f32| {
+                &samples[(start * sample_rate as f32) as usize..(end * sample_rate as f32) as usize]
+            };
+
+            assert!((0.2..=0.26).contains(&duration));
+            assert!(
+                rms(section(0.0, 0.08)) > rms(section(duration - 0.05, duration)) * 2.0,
+                "the recorded strike should decay instead of ending abruptly"
+            );
+        }
+    }
+
+    #[test]
+    fn built_in_effects_do_not_emphasize_drum_like_resonances() {
+        let rumble_frequencies = [
+            68.0, 82.0, 112.0, 126.0, 164.0, 170.0, 238.0, 252.0, 290.0, 328.0,
+        ];
+        let mechanical_frequencies = [
+            360.0, 420.0, 480.0, 580.0, 620.0, 720.0, 850.0, 980.0, 1_150.0, 1_400.0, 1_650.0,
+            1_800.0, 2_100.0, 2_400.0, 2_900.0, 3_400.0,
+        ];
+
+        for wav in embedded_wavs() {
+            let (_, sample_rate, samples) =
+                decode_pcm_wave(wav).expect("embedded WAV should decode");
+            let rumble = band_power(&samples, sample_rate, &rumble_frequencies);
+            let mechanical = band_power(&samples, sample_rate, &mechanical_frequencies);
+            assert!(
+                rumble < mechanical * 0.2,
+                "typewriter effects should favor mechanical detail over low-frequency rumble"
+            );
+        }
+    }
+
+    #[test]
+    fn key_variants_and_backspace_use_distinct_recordings() {
+        let (_, _, key) = decode_pcm_wave(TYPEWRITER_WAVS[0]).expect("key WAV should decode");
         let (_, _, deep) =
-            decode_pcm_wave(TYPEWRITER_DEEP_WAV).expect("deep key WAV should decode");
+            decode_pcm_wave(TYPEWRITER_DEEP_WAVS[0]).expect("deep key WAV should decode");
         let (_, _, soft) =
-            decode_pcm_wave(TYPEWRITER_SOFT_WAV).expect("soft key WAV should decode");
+            decode_pcm_wave(TYPEWRITER_SOFT_WAVS[0]).expect("soft key WAV should decode");
         let (_, _, backspace) =
             decode_pcm_wave(BACKSPACE_WAV).expect("backspace WAV should decode");
         let (_, _, carriage_return) =
@@ -265,6 +363,22 @@ mod tests {
             &key[..key.len().min(1_000)],
             &backspace[..key.len().min(1_000)]
         );
+        for pair in TYPEWRITER_WAVS.windows(2) {
+            assert_ne!(pair[0], pair[1], "adjacent key variants must differ");
+        }
+    }
+
+    #[test]
+    fn key_variant_selection_avoids_immediate_repetition() {
+        let mut state = 0x7A_DA_C0_DE;
+        let mut last = None;
+        for _ in 0..64 {
+            let (next_state, variant) = next_key_variant(state, last);
+            assert!(variant < KEY_VARIANT_COUNT);
+            assert_ne!(Some(variant), last);
+            state = next_state;
+            last = Some(variant);
+        }
     }
 
     #[test]
@@ -275,11 +389,11 @@ mod tests {
             &samples[(start * sample_rate as f32) as usize..(end * sample_rate as f32) as usize]
         };
 
-        assert!((0.42..=0.55).contains(&(samples.len() as f32 / sample_rate as f32)));
-        let lever = rms(section(0.0, 0.04));
-        let quiet_travel = rms(section(0.08, 0.18));
+        assert!((0.75..=0.85).contains(&(samples.len() as f32 / sample_rate as f32)));
+        let lever = rms(section(0.0, 0.08));
+        let quiet_travel = rms(section(0.08, 0.13));
         let stop_and_bell = rms(section(0.21, 0.31));
-        assert!(lever > 0.025, "lever contact should lead");
+        assert!(lever > 0.02, "lever contact should lead");
         assert!(
             quiet_travel < stop_and_bell * 0.35,
             "travel should leave space before the final strike"
@@ -289,7 +403,7 @@ mod tests {
             "stop and high bell should be the main event"
         );
         assert!(
-            rms(section(0.32, 0.45)) > 0.01,
+            rms(section(0.55, 0.75)) > 0.02,
             "bell should decay naturally"
         );
     }
