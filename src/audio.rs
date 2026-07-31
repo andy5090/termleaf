@@ -6,10 +6,12 @@
 //! players.
 
 use rodio::buffer::SamplesBuffer;
-use rodio::cpal::BufferSize;
+use rodio::cpal::StreamError;
 use rodio::{DeviceSinkBuilder, MixerDeviceSink};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::num::NonZero;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const TYPEWRITER_WAV: &[u8] = include_bytes!("../assets/typewriter-key.wav");
@@ -17,7 +19,6 @@ const TYPEWRITER_DEEP_WAV: &[u8] = include_bytes!("../assets/typewriter-key-deep
 const TYPEWRITER_SOFT_WAV: &[u8] = include_bytes!("../assets/typewriter-key-soft.wav");
 const BACKSPACE_WAV: &[u8] = include_bytes!("../assets/typewriter-backspace.wav");
 const RETURN_WAV: &[u8] = include_bytes!("../assets/typewriter-return.wav");
-const LOW_LATENCY_BUFFER_FRAMES: u32 = 512;
 const BACKSPACE_MIN_INTERVAL: Duration = Duration::from_millis(55);
 
 struct Clip {
@@ -28,7 +29,8 @@ struct Clip {
 
 /// Best-effort typewriter sound player backed by a persistent audio stream.
 pub struct SoundPlayer {
-    stream: Option<MixerDeviceSink>,
+    stream: RefCell<Option<MixerDeviceSink>>,
+    stream_healthy: Arc<AtomicBool>,
     classic_key: Clip,
     deep_key: Clip,
     soft_key: Clip,
@@ -39,10 +41,16 @@ pub struct SoundPlayer {
 
 impl SoundPlayer {
     pub fn new() -> Self {
+        let stream_healthy = Arc::new(AtomicBool::new(true));
+        let callback_state = Arc::clone(&stream_healthy);
         let stream = DeviceSinkBuilder::from_default_device()
             .and_then(|builder| {
                 builder
-                    .with_buffer_size(BufferSize::Fixed(LOW_LATENCY_BUFFER_FRAMES))
+                    .with_error_callback(move |error| {
+                        if stream_error_disables_audio(&error) {
+                            callback_state.store(false, Ordering::Release);
+                        }
+                    })
                     .open_sink_or_fallback()
             })
             .ok()
@@ -54,7 +62,8 @@ impl SoundPlayer {
             });
 
         Self {
-            stream,
+            stream: RefCell::new(stream),
+            stream_healthy,
             classic_key: Clip::decode(TYPEWRITER_WAV),
             deep_key: Clip::decode(TYPEWRITER_DEEP_WAV),
             soft_key: Clip::decode(TYPEWRITER_SOFT_WAV),
@@ -92,9 +101,12 @@ impl SoundPlayer {
     /// Rodio performs playback on its existing audio thread, so this call does
     /// not block the editor event loop.
     fn play(&self, clip: &Clip) {
-        let Some(stream) = &self.stream else {
+        if !self.stream_healthy.load(Ordering::Acquire) {
+            // Stop a failed backend without leaking its diagnostics into the
+            // terminal UI. Editing continues with audio disabled.
+            self.stream.borrow_mut().take();
             return;
-        };
+        }
         if clip.samples.is_empty() {
             return;
         }
@@ -104,12 +116,20 @@ impl SoundPlayer {
         let Some(sample_rate) = NonZero::new(clip.sample_rate) else {
             return;
         };
+        let stream = self.stream.borrow();
+        let Some(stream) = stream.as_ref() else {
+            return;
+        };
         stream.mixer().add(SamplesBuffer::new(
             channels,
             sample_rate,
             clip.samples.clone(),
         ));
     }
+}
+
+fn stream_error_disables_audio(error: &StreamError) -> bool {
+    !matches!(error, StreamError::BufferUnderrun)
 }
 
 fn backspace_playback_allowed(last: Option<Instant>, now: Instant) -> bool {
@@ -254,5 +274,19 @@ mod tests {
             Some(start),
             start + BACKSPACE_MIN_INTERVAL
         ));
+    }
+
+    #[test]
+    fn backend_failures_disable_audio_but_transient_underruns_do_not() {
+        assert!(!stream_error_disables_audio(&StreamError::BufferUnderrun));
+        assert!(stream_error_disables_audio(
+            &StreamError::DeviceNotAvailable
+        ));
+        assert!(stream_error_disables_audio(&StreamError::StreamInvalidated));
+        assert!(stream_error_disables_audio(&StreamError::BackendSpecific {
+            err: rodio::cpal::BackendSpecificError {
+                description: "`alsa::poll()` returned POLLERR".into(),
+            },
+        }));
     }
 }

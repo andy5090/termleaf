@@ -29,8 +29,8 @@ Termleaf follows Semantic Versioning:
 Create and push a tag that exactly matches the Cargo package version:
 
 ```bash
-git tag -a v0.2.1 -m "Termleaf 0.2.1"
-git push origin v0.2.1
+git tag -a v0.2.2 -m "Termleaf 0.2.2"
+git push origin v0.2.2
 ```
 
 The generated Release workflow builds macOS, x86_64 Linux, and i686 Linux
