@@ -7,6 +7,15 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-07-31
+
+### Fixed
+
+- Kept i686 audio alive after recoverable ALSA backend errors instead of
+  permanently disabling sound on the next keypress.
+- Used a stability-focused 4096-frame audio buffer on 32-bit x86 Linux and
+  automatically reopened streams after an actual device loss.
+
 ## [0.2.3] - 2026-07-31
 
 ### Changed

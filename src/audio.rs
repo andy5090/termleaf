@@ -20,6 +20,9 @@ const TYPEWRITER_SOFT_WAV: &[u8] = include_bytes!("../assets/typewriter-key-soft
 const BACKSPACE_WAV: &[u8] = include_bytes!("../assets/typewriter-backspace.wav");
 const RETURN_WAV: &[u8] = include_bytes!("../assets/typewriter-return.wav");
 const BACKSPACE_MIN_INTERVAL: Duration = Duration::from_millis(55);
+const STREAM_RETRY_INTERVAL: Duration = Duration::from_secs(2);
+#[cfg(all(target_os = "linux", target_arch = "x86"))]
+const I686_STABILITY_BUFFER_FRAMES: u32 = 4_096;
 
 struct Clip {
     samples: Vec<f32>,
@@ -37,29 +40,13 @@ pub struct SoundPlayer {
     backspace: Clip,
     carriage_return: Clip,
     last_backspace: Cell<Option<Instant>>,
+    last_stream_retry: Cell<Option<Instant>>,
 }
 
 impl SoundPlayer {
     pub fn new() -> Self {
         let stream_healthy = Arc::new(AtomicBool::new(true));
-        let callback_state = Arc::clone(&stream_healthy);
-        let stream = DeviceSinkBuilder::from_default_device()
-            .and_then(|builder| {
-                builder
-                    .with_error_callback(move |error| {
-                        if stream_error_disables_audio(&error) {
-                            callback_state.store(false, Ordering::Release);
-                        }
-                    })
-                    .open_sink_or_fallback()
-            })
-            .ok()
-            .map(|mut stream| {
-                // The stream intentionally lives until normal application
-                // shutdown, so Rodio's development-only drop warning is noise.
-                stream.log_on_drop(false);
-                stream
-            });
+        let stream = open_stream(Arc::clone(&stream_healthy));
 
         Self {
             stream: RefCell::new(stream),
@@ -70,6 +57,7 @@ impl SoundPlayer {
             backspace: Clip::decode(BACKSPACE_WAV),
             carriage_return: Clip::decode(RETURN_WAV),
             last_backspace: Cell::new(None),
+            last_stream_retry: Cell::new(None),
         }
     }
 
@@ -101,12 +89,7 @@ impl SoundPlayer {
     /// Rodio performs playback on its existing audio thread, so this call does
     /// not block the editor event loop.
     fn play(&self, clip: &Clip) {
-        if !self.stream_healthy.load(Ordering::Acquire) {
-            // Stop a failed backend without leaking its diagnostics into the
-            // terminal UI. Editing continues with audio disabled.
-            self.stream.borrow_mut().take();
-            return;
-        }
+        self.recover_stream_if_needed();
         if clip.samples.is_empty() {
             return;
         }
@@ -126,14 +109,68 @@ impl SoundPlayer {
             clip.samples.clone(),
         ));
     }
+
+    fn recover_stream_if_needed(&self) {
+        let healthy = self.stream_healthy.load(Ordering::Acquire);
+        if healthy && self.stream.borrow().is_some() {
+            return;
+        }
+
+        if !healthy {
+            self.stream.borrow_mut().take();
+        }
+
+        let now = Instant::now();
+        if !stream_retry_allowed(self.last_stream_retry.get(), now) {
+            return;
+        }
+
+        self.last_stream_retry.set(Some(now));
+        self.stream_healthy.store(true, Ordering::Release);
+        *self.stream.borrow_mut() = open_stream(Arc::clone(&self.stream_healthy));
+    }
 }
 
-fn stream_error_disables_audio(error: &StreamError) -> bool {
-    !matches!(error, StreamError::BufferUnderrun)
+fn open_stream(stream_healthy: Arc<AtomicBool>) -> Option<MixerDeviceSink> {
+    let callback_state = Arc::clone(&stream_healthy);
+    let builder = DeviceSinkBuilder::from_default_device().ok()?;
+
+    // Older 32-bit x86 machines have less scheduling headroom. Rodio documents
+    // 2048-4096 frames as its stability-focused range, so use the upper bound
+    // there while retaining the lower-latency default on other targets.
+    #[cfg(all(target_os = "linux", target_arch = "x86"))]
+    let builder =
+        builder.with_buffer_size(rodio::cpal::BufferSize::Fixed(I686_STABILITY_BUFFER_FRAMES));
+
+    builder
+        .with_error_callback(move |error| {
+            if stream_error_requires_rebuild(&error) {
+                callback_state.store(false, Ordering::Release);
+            }
+        })
+        .open_sink_or_fallback()
+        .ok()
+        .map(|mut stream| {
+            // The stream intentionally lives until normal application
+            // shutdown, so Rodio's development-only drop warning is noise.
+            stream.log_on_drop(false);
+            stream
+        })
+}
+
+fn stream_error_requires_rebuild(error: &StreamError) -> bool {
+    matches!(
+        error,
+        StreamError::DeviceNotAvailable | StreamError::StreamInvalidated
+    )
 }
 
 fn backspace_playback_allowed(last: Option<Instant>, now: Instant) -> bool {
     last.is_none_or(|last| now.duration_since(last) >= BACKSPACE_MIN_INTERVAL)
+}
+
+fn stream_retry_allowed(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|last| now.duration_since(last) >= STREAM_RETRY_INTERVAL)
 }
 
 impl Clip {
@@ -277,16 +314,34 @@ mod tests {
     }
 
     #[test]
-    fn backend_failures_disable_audio_but_transient_underruns_do_not() {
-        assert!(!stream_error_disables_audio(&StreamError::BufferUnderrun));
-        assert!(stream_error_disables_audio(
+    fn only_device_loss_and_invalidated_streams_require_a_rebuild() {
+        assert!(!stream_error_requires_rebuild(&StreamError::BufferUnderrun));
+        assert!(stream_error_requires_rebuild(
             &StreamError::DeviceNotAvailable
         ));
-        assert!(stream_error_disables_audio(&StreamError::StreamInvalidated));
-        assert!(stream_error_disables_audio(&StreamError::BackendSpecific {
-            err: rodio::cpal::BackendSpecificError {
-                description: "`alsa::poll()` returned POLLERR".into(),
-            },
-        }));
+        assert!(stream_error_requires_rebuild(
+            &StreamError::StreamInvalidated
+        ));
+        assert!(!stream_error_requires_rebuild(
+            &StreamError::BackendSpecific {
+                err: rodio::cpal::BackendSpecificError {
+                    description: "`alsa::poll()` returned POLLERR".into(),
+                },
+            }
+        ));
+    }
+
+    #[test]
+    fn failed_stream_retries_are_rate_limited() {
+        let start = Instant::now();
+        assert!(stream_retry_allowed(None, start));
+        assert!(!stream_retry_allowed(
+            Some(start),
+            start + STREAM_RETRY_INTERVAL - Duration::from_millis(1)
+        ));
+        assert!(stream_retry_allowed(
+            Some(start),
+            start + STREAM_RETRY_INTERVAL
+        ));
     }
 }
