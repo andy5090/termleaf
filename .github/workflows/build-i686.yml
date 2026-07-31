@@ -1,0 +1,83 @@
+name: Build Linux i686
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: false
+        type: string
+
+jobs:
+  build-i686:
+    runs-on: ubuntu-22.04
+    container: debian:bullseye
+    env:
+      CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_LINKER: gcc
+      PKG_CONFIG_ALLOW_CROSS: "1"
+      PKG_CONFIG_PATH: /usr/lib/i386-linux-gnu/pkgconfig
+      RUSTFLAGS: "-C link-arg=-m32"
+    steps:
+      - name: Install build tools
+        run: |
+          dpkg --add-architecture i386
+          apt-get update
+          apt-get install --yes \
+            ca-certificates \
+            curl \
+            file \
+            gcc-multilib \
+            git \
+            libc6-dev-i386 \
+            libasound2-dev:i386 \
+            pkg-config \
+            xz-utils
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-unknown-linux-gnu
+
+      - name: Cache Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: i686-unknown-linux-gnu
+
+      - name: Test i686 target
+        run: cargo test --locked --all-features --target i686-unknown-linux-gnu
+
+      - name: Build i686 release
+        run: cargo build --locked --profile dist --target i686-unknown-linux-gnu --bins
+
+      - name: Verify and package i686 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=i686-unknown-linux-gnu
+          archive_root="target/distrib/termleaf-${target}"
+          mkdir -p "$archive_root"
+          cp "target/${target}/dist/termleaf" "$archive_root/"
+          cp "target/${target}/dist/termleaf-update" "$archive_root/"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "$archive_root/"
+
+          file "$archive_root/termleaf" | grep -F "ELF 32-bit"
+          "$archive_root/termleaf" --version
+          "$archive_root/termleaf-update" --version
+
+          tar -C target/distrib -cJf "${archive_root}.tar.xz" "termleaf-${target}"
+          (
+            cd target/distrib
+            sha256sum "termleaf-${target}.tar.xz" >"termleaf-${target}.tar.xz.sha256"
+          )
+
+      - name: Upload i686 artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-build-i686
+          path: |
+            target/distrib/termleaf-i686-unknown-linux-gnu.tar.xz
+            target/distrib/termleaf-i686-unknown-linux-gnu.tar.xz.sha256

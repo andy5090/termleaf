@@ -40,3 +40,7 @@ jobs:
 
       - name: Build (release)
         run: cargo build --release --verbose
+
+  linux-i686:
+    name: Build & Test Linux i686
+    uses: ./.github/workflows/build-i686.yml

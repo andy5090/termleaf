@@ -49,9 +49,9 @@ on the words, and save without leaving the terminal.
 
 ### macOS and Linux (recommended)
 
-The installer detects Apple Silicon, Intel macOS, or x86_64 Linux, verifies the
-release archive, and installs `termleaf` into Cargo's conventional binary
-directory:
+The installer detects Apple Silicon, Intel macOS, x86_64 Linux, or 32-bit x86
+Linux (`i686`), verifies the release archive, and installs `termleaf` into
+Cargo's conventional binary directory:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
