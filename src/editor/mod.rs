@@ -89,8 +89,8 @@ impl Editor {
         line.splice(insert_at..insert_at, composing.iter().copied());
 
         let caret = insert_at + composing.len();
-        let start = caret.saturating_sub(max_chars);
-        let end = (start + max_chars).min(line.len());
+        let end = caret.min(line.len());
+        let start = end.saturating_sub(max_chars);
         line[start..end].to_vec()
     }
 

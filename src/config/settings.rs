@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 pub const MIN_FONT: u16 = 1;
 pub const MAX_FONT: u16 = 5;
+pub const MIN_LINE_SPACING: u16 = 1;
+pub const MAX_LINE_SPACING: u16 = 3;
 
 /// Runtime configuration for the app.
 #[derive(Debug, Clone)]
@@ -29,6 +31,10 @@ pub struct Config {
     pub big_font: bool,
     /// Pixel scale for the big-font renderer (`MIN_FONT..=MAX_FONT`).
     pub font_size: u16,
+    /// Terminal rows between document baselines (`1` is compact).
+    pub line_spacing: u16,
+    /// Center writing inside a readable-width page on wide terminals.
+    pub page_width: bool,
     /// Theme name (resolved by `ui::themes`).
     pub theme: String,
     /// Interface language (`en` or `ko`).
@@ -50,6 +56,8 @@ impl Default for Config {
             sound_profile: "classic".to_string(),
             big_font: true,
             font_size: 2,
+            line_spacing: 2,
+            page_width: false,
             theme: "paper".to_string(),
             language: "en".to_string(),
             show_welcome: true,
@@ -114,6 +122,12 @@ impl Config {
                         cfg.font_size = n.clamp(MIN_FONT, MAX_FONT);
                     }
                 }
+                "line_spacing" => {
+                    if let Ok(n) = value.parse::<u16>() {
+                        cfg.line_spacing = n.clamp(MIN_LINE_SPACING, MAX_LINE_SPACING);
+                    }
+                }
+                "page_width" => cfg.page_width = parse_bool(value, cfg.page_width),
                 "theme" => cfg.theme = value.to_string(),
                 "language" => {
                     cfg.language = match value {
@@ -157,6 +171,8 @@ impl Config {
              sound_profile = {}\n\
              big_font = {}\n\
              font_size = {}\n\
+             line_spacing = {}\n\
+             page_width = {}\n\
              theme = {}\n\
              language = {}\n\
              show_welcome = {}\n\
@@ -169,6 +185,8 @@ impl Config {
             self.sound_profile,
             self.big_font,
             self.font_size,
+            self.line_spacing,
+            self.page_width,
             self.theme,
             self.language,
             self.show_welcome,
@@ -182,6 +200,14 @@ impl Config {
 
     pub fn font_dec(&mut self) {
         self.font_size = self.font_size.saturating_sub(1).max(MIN_FONT);
+    }
+
+    pub fn cycle_line_spacing(&mut self) {
+        self.line_spacing = if self.line_spacing >= MAX_LINE_SPACING {
+            MIN_LINE_SPACING
+        } else {
+            self.line_spacing + 1
+        };
     }
 
     pub fn toggle_language(&mut self) {
@@ -246,6 +272,21 @@ mod tests {
     }
 
     #[test]
+    fn line_spacing_defaults_to_relaxed_and_cycles_all_levels() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.line_spacing, 2);
+        cfg.cycle_line_spacing();
+        assert_eq!(cfg.line_spacing, 3);
+        cfg.cycle_line_spacing();
+        assert_eq!(cfg.line_spacing, 1);
+        cfg.cycle_line_spacing();
+        assert_eq!(cfg.line_spacing, 2);
+
+        assert_eq!(Config::from_text("line_spacing = 0").line_spacing, 1);
+        assert_eq!(Config::from_text("line_spacing = 9").line_spacing, 3);
+    }
+
+    #[test]
     fn interface_language_defaults_to_english_and_toggles() {
         let mut cfg = Config::default();
         assert_eq!(cfg.language, "en");
@@ -280,6 +321,8 @@ mod tests {
             sound_profile: "soft".to_string(),
             big_font: false,
             font_size: 3,
+            line_spacing: 3,
+            page_width: true,
             theme: "xt".to_string(),
             language: "ko".to_string(),
             show_welcome: false,
@@ -294,6 +337,8 @@ mod tests {
         assert_eq!(restored.sound_profile, "soft");
         assert!(!restored.big_font);
         assert_eq!(restored.font_size, 3);
+        assert_eq!(restored.line_spacing, 3);
+        assert!(restored.page_width);
         assert_eq!(restored.theme, "xt");
         assert_eq!(restored.language, "ko");
         assert!(!restored.show_welcome);

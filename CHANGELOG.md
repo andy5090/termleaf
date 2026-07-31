@@ -7,6 +7,20 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-31
+
+### Added
+
+- Added three persisted document line-spacing levels, with a relaxed
+  one-blank-row gap as the default and `Alt+L` to cycle them.
+- Added an optional centered 80-column page-width mode toggled with `Alt+P`.
+
+### Changed
+
+- Made the large-text zone display as many cursor-side characters as the
+  current terminal width and selected scale can fit instead of stopping at a
+  fixed 12-character limit.
+
 ## [0.2.4] - 2026-07-31
 
 ### Fixed

@@ -31,6 +31,8 @@ pub enum Action {
     CycleSoundProfile,
     FontInc,
     FontDec,
+    CycleLineSpacing,
+    TogglePageWidth,
     Open,
     Save,
     SaveAs,
@@ -51,6 +53,16 @@ pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
             's' => Action::Save,
             _ => Action::Ignore,
         },
+        KeyCode::Char(c)
+            if key.modifiers.contains(KeyModifiers::ALT) && c.eq_ignore_ascii_case(&'l') =>
+        {
+            Action::CycleLineSpacing
+        }
+        KeyCode::Char(c)
+            if key.modifiers.contains(KeyModifiers::ALT) && c.eq_ignore_ascii_case(&'p') =>
+        {
+            Action::TogglePageWidth
+        }
         KeyCode::F(1) => Action::ShowHelp,
         KeyCode::F(2) => Action::ToggleLiveComposition,
         KeyCode::F(3) => Action::ToggleFocus,
@@ -140,6 +152,14 @@ mod tests {
         assert_eq!(
             map_key(KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE), false),
             Action::SaveAs
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT), false),
+            Action::CycleLineSpacing
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT), false),
+            Action::TogglePageWidth
         );
         assert_eq!(
             map_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE), false),

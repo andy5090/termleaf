@@ -9,7 +9,7 @@ the rest of the desktop out of the way.
 [![CI](https://github.com/andy5090/termleaf/actions/workflows/ci.yml/badge.svg)](https://github.com/andy5090/termleaf/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-> Status: v0.2 — a working foundation. Rendering is ANSI-only (via
+> Status: v0.3 — a working foundation. Rendering is ANSI-only (via
 > [`crossterm`](https://crates.io/crates/crossterm)) so it runs on virtually any
 > terminal.
 
@@ -23,6 +23,10 @@ on the words, and save without leaving the terminal.
 ## Features
 
 - **Focus mode** — hides all chrome so only your words remain.
+- **Readable page width** — optionally centers writing in an 80-column page on
+  wide terminals.
+- **Relaxed line spacing** — defaults to a comfortable one-row gap and cycles
+  through three persisted spacing levels.
 - **Open and save in-app** — choose a filename on first save, reopen another
   document, or save under a new name without leaving Termleaf.
 - **Save & autosave** — plain-text documents (`.md` by default), with
@@ -135,6 +139,8 @@ release artifacts.
 | `F5` | toggle system-audio keystroke sound |
 | `F6` | cycle `paper` / `night` / `xt` / `amber` theme |
 | `F7` / `F8` | decrease / increase big-font size across five effective levels |
+| `Alt+L` | cycle document line spacing through levels 1–3 |
+| `Alt+P` | toggle the centered 80-column page-width mode |
 | `F9` | toggle English / Korean interface guidance |
 | `F10` | open detailed sound settings (master / delete / return / key style) |
 | `F11` | cycle `classic` / `deep` / `soft` typewriter sound |
@@ -194,6 +200,8 @@ return_sound = true
 sound_profile = classic
 big_font = true
 font_size = 2
+line_spacing = 2
+page_width = false
 # theme: paper, night, xt, or amber
 theme = paper
 language = en

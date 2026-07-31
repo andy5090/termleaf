@@ -239,6 +239,8 @@ fn apply(
         }
         Action::FontInc => cfg.font_inc(),
         Action::FontDec => cfg.font_dec(),
+        Action::CycleLineSpacing => cfg.cycle_line_spacing(),
+        Action::TogglePageWidth => cfg.page_width = !cfg.page_width,
         Action::Open => ui.file_prompt = Some(FilePrompt::open(editor.doc.path.as_deref())),
         Action::Save => {
             if editor.doc.path.is_some() {

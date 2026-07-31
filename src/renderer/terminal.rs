@@ -6,13 +6,15 @@ use crossterm::style::{Print, SetBackgroundColor, SetForegroundColor};
 use crossterm::{cursor, queue, terminal, SynchronizedUpdate};
 
 use super::font::{glyph_for, Glyph};
-use crate::config::settings::MAX_FONT;
+use crate::config::settings::{MAX_FONT, MAX_LINE_SPACING};
 use crate::config::Config;
 use crate::editor::Editor;
 use crate::ui::{
     char_width, FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, Layout, SoundSettings,
     Theme,
 };
+
+const PAGE_CONTENT_WIDTH: u16 = 80;
 
 /// RAII guard: enters raw mode + the alternate screen on creation and restores
 /// the terminal on drop (including on panic).
@@ -103,7 +105,7 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
         draw_big(out, frame.editor, frame.cfg, frame.theme, frame.layout)?;
     }
 
-    let caret = draw_document(out, frame.editor, frame.theme, frame.layout)?;
+    let caret = draw_document(out, frame.editor, frame.cfg, frame.theme, frame.layout)?;
 
     let prompt_caret = if let (Some(sr), Some(prompt)) = (frame.layout.status_row, frame.prompt) {
         Some(draw_file_prompt(
@@ -395,6 +397,7 @@ fn draw_help(
             "",
             "파일: Ctrl+O 열기 · Ctrl+S 저장 · F12 다른 이름 (.md 기본)",
             "화면: F3 집중 · F4 큰글자 · F6 테마 · F7/F8 크기 1–5",
+            "보기: Alt+L 줄간격 1–3 · Alt+P 페이지 폭",
             "소리: F5 전체 · F10 세부 설정(삭제/엔터) · F11 타자음",
             "기타: Backspace/Delete 삭제 · F9 English · F1 도움말 · Ctrl+Q 종료",
         ]
@@ -406,6 +409,7 @@ fn draw_help(
             "",
             "Files: Ctrl+O Open · Ctrl+S Save · F12 Save as (.md default)",
             "View: F3 Focus · F4 Big text · F6 Theme · F7/F8 Size 1–5",
+            "Reading: Alt+L Line spacing 1–3 · Alt+P Page width",
             "Sound: F5 Master · F10 Details (delete/return) · F11 Key style",
             "Other: Backspace/Delete · F9 Korean · F1 Help · Ctrl+Q Quit",
         ]
@@ -532,40 +536,111 @@ fn print_chars(
 fn draw_document(
     out: &mut Stdout,
     editor: &Editor,
+    cfg: &Config,
     theme: &Theme,
     layout: &Layout,
 ) -> io::Result<(Option<u16>, Option<u16>)> {
     let lines = editor.lines();
     let cur = editor.cursor();
     let composing: Vec<char> = editor.composing().chars().collect();
-    let left_margin: u16 = 4;
-    let doc_height = layout.doc_height as usize;
-    let top = if cur.row >= doc_height {
-        cur.row - doc_height + 1
+    let (left_margin, content_width) = writing_column(cfg, layout.cols);
+    let line_spacing = cfg.line_spacing.max(1);
+    let line_capacity = visible_line_capacity(layout.doc_height, line_spacing);
+    let top = if cur.row >= line_capacity {
+        cur.row - line_capacity + 1
     } else {
         0
     };
 
     let mut caret = (None, None);
-    for i in 0..doc_height {
+    for i in 0..line_capacity {
         let idx = top + i;
         if idx >= lines.len() {
             break;
         }
-        let y = layout.doc_top + i as u16;
+        let y = layout.doc_top + i as u16 * line_spacing;
         if idx == cur.row {
             let line = &lines[idx];
             let split = cur.col.min(line.len());
-            let (l, r) = line.split_at(split);
-            let mut x = print_chars(out, left_margin, y, l, theme.fg, theme.bg)?;
-            x = print_chars(out, x, y, &composing, theme.accent, theme.bg)?;
+            let mut display = line.clone();
+            display.splice(split..split, composing.iter().copied());
+            let composition_end = split + composing.len();
+            let (start, end) = visible_char_range(&display, composition_end, content_width);
+
+            let before_end = end.min(split);
+            let mut x = left_margin;
+            if start < before_end {
+                x = print_chars(out, x, y, &display[start..before_end], theme.fg, theme.bg)?;
+            }
+
+            let composition_start = start.max(split);
+            let composition_visible_end = end.min(composition_end);
+            if composition_start < composition_visible_end {
+                x = print_chars(
+                    out,
+                    x,
+                    y,
+                    &display[composition_start..composition_visible_end],
+                    theme.accent,
+                    theme.bg,
+                )?;
+            }
+
             caret = (Some(x), Some(y));
-            print_chars(out, x, y, r, theme.fg, theme.bg)?;
+            let after_start = start.max(composition_end);
+            if after_start < end {
+                print_chars(out, x, y, &display[after_start..end], theme.fg, theme.bg)?;
+            }
         } else {
-            print_chars(out, left_margin, y, &lines[idx], theme.fg, theme.bg)?;
+            let (_, end) = visible_char_range(&lines[idx], 0, content_width);
+            print_chars(out, left_margin, y, &lines[idx][..end], theme.fg, theme.bg)?;
         }
     }
     Ok(caret)
+}
+
+fn writing_column(cfg: &Config, terminal_width: u16) -> (u16, u16) {
+    if terminal_width == 0 {
+        return (0, 0);
+    }
+    if cfg.page_width {
+        let width = terminal_width.min(PAGE_CONTENT_WIDTH);
+        ((terminal_width - width) / 2, width)
+    } else {
+        let margin = terminal_width.min(4);
+        (margin, terminal_width.saturating_sub(margin).max(1))
+    }
+}
+
+fn visible_line_capacity(height: u16, spacing: u16) -> usize {
+    if height == 0 {
+        0
+    } else {
+        (height.saturating_sub(1) / spacing.max(1) + 1) as usize
+    }
+}
+
+fn visible_char_range(line: &[char], caret: usize, width: u16) -> (usize, usize) {
+    let width = width.max(1);
+    let caret = caret.min(line.len());
+    let mut start = 0;
+    let mut before_width = line[..caret].iter().map(|&c| char_width(c)).sum::<u16>();
+    while start < caret && before_width >= width {
+        before_width = before_width.saturating_sub(char_width(line[start]));
+        start += 1;
+    }
+
+    let mut used: u16 = 0;
+    let mut end = start;
+    while end < line.len() {
+        let next = used.saturating_add(char_width(line[end]));
+        if next > width {
+            break;
+        }
+        used = next;
+        end += 1;
+    }
+    (start, end)
 }
 
 fn draw_big(
@@ -575,10 +650,11 @@ fn draw_big(
     theme: &Theme,
     layout: &Layout,
 ) -> io::Result<()> {
-    // Follow a short slice of the active line, including live composition.
-    // This gives the focus zone enough context to read like a phrase while
-    // keeping the cursor-side text visible on narrow terminals.
-    let chars = editor.focus_text(12);
+    let (focus_left, focus_width) = writing_column(cfg, layout.cols);
+    // One terminal column is the theoretical minimum per glyph, so fetching
+    // at most the available width is sufficient. The exact glyph widths below
+    // then determine how many characters really fit.
+    let chars = editor.focus_text(focus_width as usize);
     if chars.is_empty() {
         return Ok(());
     }
@@ -589,26 +665,24 @@ fn draw_big(
     // Previously the renderer silently reduced the scale to fit the whole
     // phrase, making several configured levels look identical.
     let requested_scale = cfg.font_size.max(1);
-    while glyphs.len() > 1 && unscaled_width(&glyphs).saturating_mul(requested_scale) > layout.cols
-    {
-        glyphs.remove(0);
-    }
+    trim_glyphs_to_width(&mut glyphs, requested_scale, focus_width);
     let glyph_h_max = glyphs.iter().map(|g| g.height as u16).max().unwrap_or(10);
-    if layout.big_height * 2 < glyph_h_max || unscaled_width(&glyphs) > layout.cols {
+    if layout.big_height * 2 < glyph_h_max || unscaled_width(&glyphs) > focus_width {
         return Ok(());
     }
-    let available_x = layout.cols / unscaled_width(&glyphs).max(1);
+    let available_x = focus_width / unscaled_width(&glyphs).max(1);
     let available_y = layout.big_height * 2 / glyph_h_max.max(1);
     let (scale_x, scale_y) = fitted_scales(requested_scale, available_x, available_y);
     let gap = scale_x;
 
     let widths_sum: u16 = glyphs.iter().map(|g| g.width as u16 * scale_x).sum();
     let total = widths_sum + gap * (glyphs.len() as u16 - 1);
-    let start_x = if total < layout.cols {
-        (layout.cols - total) / 2
-    } else {
-        0
-    };
+    let start_x = focus_left
+        + if total < focus_width {
+            (focus_width - total) / 2
+        } else {
+            0
+        };
 
     let block_h = (glyph_h_max * scale_y).div_ceil(2);
     let start_y = layout.big_top
@@ -637,6 +711,12 @@ fn fitted_scales(requested: u16, available_x: u16, available_y: u16) -> (u16, u1
 fn unscaled_width(glyphs: &[Glyph]) -> u16 {
     let glyph_width: u16 = glyphs.iter().map(|g| g.width as u16).sum();
     glyph_width.saturating_add(glyphs.len().saturating_sub(1) as u16)
+}
+
+fn trim_glyphs_to_width(glyphs: &mut Vec<Glyph>, scale: u16, width: u16) {
+    while glyphs.len() > 1 && unscaled_width(glyphs).saturating_mul(scale) > width {
+        glyphs.remove(0);
+    }
 }
 
 fn draw_glyph(
@@ -730,19 +810,25 @@ fn draw_status(
     let stage = editor.composer().stage();
     let left = if korean {
         format!(
-            " {mode} │ {sound} │ {dirty}{name} │ {}단어 {}자 │ 크기 {}/{} │ 조합 {stage}/3 ",
+            " {mode} │ {sound} │ {dirty}{name} │ {}단어 {}자 │ 크기 {}/{} │ 줄 {}/{} │ 페이지:{} │ 조합 {stage}/3 ",
             editor.word_count(),
             editor.char_count(),
             cfg.font_size,
             MAX_FONT,
+            cfg.line_spacing,
+            MAX_LINE_SPACING,
+            if cfg.page_width { "켬" } else { "끔" },
         )
     } else {
         format!(
-            " {mode} │ {sound} │ {dirty}{name} │ {} words {} chars │ size {}/{} │ compose {stage}/3 ",
+            " {mode} │ {sound} │ {dirty}{name} │ {} words {} chars │ size {}/{} │ line {}/{} │ page:{} │ compose {stage}/3 ",
             editor.word_count(),
             editor.char_count(),
             cfg.font_size,
             MAX_FONT,
+            cfg.line_spacing,
+            MAX_LINE_SPACING,
+            if cfg.page_width { "on" } else { "off" },
         )
     };
 
@@ -784,9 +870,9 @@ fn draw_shortcuts(
     } else if prompt.is_some() {
         " Enter Save  Esc Cancel  │ No extension → .md  F9 Korean ".to_string()
     } else if korean {
-        " F1 도움말 ^O 열기 ^S 저장 F12 다른이름 ^Q 종료 │ F2 직접 한글 F3 집중 F4 큰글자 F5 소리 F6 테마 F7/8 크기 F9 영어 F10 소리설정 F11 타자음 ".to_string()
+        " F1 도움 ^O 열기 ^S 저장 F12 다른이름 ^Q 종료 │ Alt+L 줄간격 Alt+P 페이지폭 F2 한글 F3 집중 F4 큰글자 F5 소리 F6 테마 F7/8 크기 F9 영어 F10 소리설정 ".to_string()
     } else {
-        " F1 Help ^O Open ^S Save F12 Save-as ^Q Quit │ F2 Live Korean F3 Focus F4 Big F5 Sound F6 Theme F7/8 Size F9 Korean F10 Sound setup F11 Key SFX ".to_string()
+        " F1 Help ^O Open ^S Save F12 Save-as ^Q Quit │ Alt+L Line spacing Alt+P Page width F2 Korean F3 Focus F4 Big F5 Sound F6 Theme F7/8 Size F9 한국어 F10 Sound setup ".to_string()
     };
     let bar: String = " ".repeat(cols as usize);
     queue!(
@@ -892,5 +978,40 @@ mod tests {
     fn taller_terminals_keep_the_largest_levels_proportional() {
         assert_eq!(fitted_scales(4, 5, 5), (4, 4));
         assert_eq!(fitted_scales(5, 5, 5), (5, 5));
+    }
+
+    #[test]
+    fn relaxed_line_spacing_uses_physical_rows_without_losing_the_cursor_line() {
+        assert_eq!(visible_line_capacity(10, 1), 10);
+        assert_eq!(visible_line_capacity(10, 2), 5);
+        assert_eq!(visible_line_capacity(10, 3), 4);
+        assert_eq!(visible_line_capacity(0, 2), 0);
+    }
+
+    #[test]
+    fn page_width_centers_an_eighty_column_writing_area() {
+        let mut cfg = Config::default();
+        assert_eq!(writing_column(&cfg, 120), (4, 116));
+
+        cfg.page_width = true;
+        assert_eq!(writing_column(&cfg, 120), (20, 80));
+        assert_eq!(writing_column(&cfg, 60), (0, 60));
+    }
+
+    #[test]
+    fn long_lines_scroll_horizontally_to_keep_the_caret_visible() {
+        let line: Vec<char> = "a한b".chars().collect();
+        assert_eq!(visible_char_range(&line, 3, 4), (1, 3));
+        assert_eq!(visible_char_range(&line, 3, 3), (2, 3));
+    }
+
+    #[test]
+    fn wider_focus_areas_show_more_big_glyphs() {
+        let glyphs = vec![glyph_for('a'); 30];
+        let mut narrow = glyphs.clone();
+        let mut wide = glyphs;
+        trim_glyphs_to_width(&mut narrow, 1, 40);
+        trim_glyphs_to_width(&mut wide, 1, 80);
+        assert!(wide.len() > narrow.len());
     }
 }
