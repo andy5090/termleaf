@@ -216,14 +216,14 @@ fn draw_sound_settings(
     };
     let lines = if korean {
         [
-            format!("[{}] 전체 소리 (F5)", enabled(cfg.sound)),
+            format!("[{}] 타이핑 소리", enabled(cfg.sound)),
             format!("[{}] 삭제 소리", enabled(cfg.backspace_sound)),
             format!("[{}] 캐리지 리턴 소리", enabled(cfg.return_sound)),
             format!("[{}] 타자기 종류 (F11)", cfg.sound_profile),
         ]
     } else {
         [
-            format!("[{}] Master sound (F5)", enabled(cfg.sound)),
+            format!("[{}] Typing sound", enabled(cfg.sound)),
             format!("[{}] Delete sound", enabled(cfg.backspace_sound)),
             format!("[{}] Carriage-return sound", enabled(cfg.return_sound)),
             format!("[{}] Key style (F11)", cfg.sound_profile),
@@ -397,8 +397,8 @@ fn draw_help(
             "",
             "파일: Ctrl+O 열기 · Ctrl+S 저장 · F12 다른 이름 (.md 기본)",
             "화면: F3 집중 · F4 큰글자 · F6 테마 · F7/F8 크기 1–5",
-            "보기: Alt+L 줄간격 1–3 · Alt+P 페이지 폭",
-            "소리: F5 전체 · F10 세부 설정(삭제/엔터) · F11 타자음",
+            "보기: Alt+L 줄간격 1–3 · F5 종이 폭 (Alt+P 보조)",
+            "소리: F10 설정(타이핑/삭제/엔터) · F11 타자음",
             "기타: Backspace/Delete 삭제 · F9 English · F1 도움말 · Ctrl+Q 종료",
         ]
     } else {
@@ -409,8 +409,8 @@ fn draw_help(
             "",
             "Files: Ctrl+O Open · Ctrl+S Save · F12 Save as (.md default)",
             "View: F3 Focus · F4 Big text · F6 Theme · F7/F8 Size 1–5",
-            "Reading: Alt+L Line spacing 1–3 · Alt+P Page width",
-            "Sound: F5 Master · F10 Details (delete/return) · F11 Key style",
+            "Reading: Alt+L Line spacing 1–3 · F5 Page width (Alt+P alternate)",
+            "Sound: F10 Settings (typing/delete/return) · F11 Key style",
             "Other: Backspace/Delete · F9 Korean · F1 Help · Ctrl+Q Quit",
         ]
     };
@@ -925,10 +925,8 @@ fn draw_shortcuts(
         " Enter 저장  Esc 취소  │ 확장자 생략 시 .md  F9 영어 ".to_string()
     } else if prompt.is_some() {
         " Enter Save  Esc Cancel  │ No extension → .md  F9 Korean ".to_string()
-    } else if korean {
-        " F1 도움 ^O 열기 ^S 저장 F12 다른이름 ^Q 종료 │ Alt+L 줄간격 Alt+P 페이지폭 F2 한글 F3 집중 F4 큰글자 F5 소리 F6 테마 F7/8 크기 F9 영어 F10 소리설정 ".to_string()
     } else {
-        " F1 Help ^O Open ^S Save F12 Save-as ^Q Quit │ Alt+L Line spacing Alt+P Page width F2 Korean F3 Focus F4 Big F5 Sound F6 Theme F7/8 Size F9 한국어 F10 Sound setup ".to_string()
+        shortcut_guide(korean, cols).to_string()
     };
     let bar: String = " ".repeat(cols as usize);
     queue!(
@@ -940,6 +938,35 @@ fn draw_shortcuts(
         cursor::MoveTo(0, row),
         Print(clipped(&text, cols))
     )
+}
+
+fn shortcut_guide(korean: bool, cols: u16) -> &'static str {
+    let choices = if korean {
+        [
+            " F1 도움 F5 종이폭 F10 소리설정 ^O 열기 ^S 저장 F12 다른이름 ^Q 종료 │ Alt+L 줄간격 F2 한글 F3 집중 F4 큰글자 F6 테마 F7/8 크기 F9 영어 ",
+            " F1 도움 F5 종이폭 F10 소리설정 ^O 열기 ^S 저장 ^Q 종료 │ F3 집중 F6 테마 F7/8 크기 ",
+            " F1 도움 F5 종이폭 F10 소리설정 ^S 저장 ^Q 종료 ",
+            " F1 도움 F5 종이 F10 소리 ",
+            " F5 종이 F10 소리 ",
+        ]
+    } else {
+        [
+            " F1 Help F5 Page width F10 Sound setup ^O Open ^S Save F12 Save-as ^Q Quit │ Alt+L Line spacing F2 Korean F3 Focus F4 Big F6 Theme F7/8 Size F9 한국어 ",
+            " F1 Help F5 Page F10 Sound ^O Open ^S Save ^Q Quit │ F3 Focus F6 Theme F7/8 Size ",
+            " F1 Help F5 Page F10 Sound ^S Save ^Q Quit ",
+            " F1 Help F5 Page F10 Sound ",
+            " F5 Page F10 Sound ",
+        ]
+    };
+
+    choices
+        .into_iter()
+        .find(|text| text_width(text) <= cols)
+        .unwrap_or(choices[4])
+}
+
+fn text_width(text: &str) -> u16 {
+    text.chars().map(char_width).sum()
 }
 
 fn draw_file_prompt(
@@ -1021,6 +1048,26 @@ fn clipped_from_end(text: &str, max_width: u16) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shortcut_guide_adapts_to_terminal_width_without_hiding_sound_settings() {
+        for korean in [false, true] {
+            for width in [24, 40, 80, 180] {
+                let guide = shortcut_guide(korean, width);
+                assert!(text_width(guide) <= width);
+                assert!(guide.contains("F5"));
+                assert!(guide.contains("F10"));
+                if width >= 40 {
+                    assert!(guide.contains("F1"));
+                }
+            }
+        }
+
+        assert!(!shortcut_guide(false, 40).contains("Alt+L"));
+        assert!(shortcut_guide(false, 180).contains("Alt+L"));
+        assert!(!shortcut_guide(true, 40).contains("Alt+L"));
+        assert!(shortcut_guide(true, 180).contains("Alt+L"));
+    }
 
     #[test]
     fn five_font_levels_remain_distinct_on_a_standard_height() {

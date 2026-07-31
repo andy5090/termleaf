@@ -24,7 +24,6 @@ pub enum Action {
     ShowHelp,
     ToggleFocus,
     ToggleBigFont,
-    ToggleSound,
     ToggleTheme,
     ToggleLanguage,
     ShowSoundSettings,
@@ -67,7 +66,7 @@ pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
         KeyCode::F(2) => Action::ToggleLiveComposition,
         KeyCode::F(3) => Action::ToggleFocus,
         KeyCode::F(4) => Action::ToggleBigFont,
-        KeyCode::F(5) => Action::ToggleSound,
+        KeyCode::F(5) => Action::TogglePageWidth,
         KeyCode::F(6) => Action::ToggleTheme,
         KeyCode::F(7) => Action::FontDec,
         KeyCode::F(8) => Action::FontInc,
@@ -144,6 +143,10 @@ mod tests {
         assert_eq!(
             map_key(KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE), false),
             Action::ShowSoundSettings
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE), false),
+            Action::TogglePageWidth
         );
         assert_eq!(
             map_key(KeyEvent::new(KeyCode::F(11), KeyModifiers::NONE), false),

@@ -19,11 +19,11 @@ pub struct Config {
     pub live_composition: bool,
     /// Focus mode hides the status bar and other chrome.
     pub focus_mode: bool,
-    /// Play mechanical key and backspace effects.
+    /// Enable typing sound effects and their optional delete/return sounds.
     pub sound: bool,
-    /// Play the separate backspace effect when master sound is enabled.
+    /// Play the separate backspace effect when typing sound is enabled.
     pub backspace_sound: bool,
-    /// Play the carriage-return bell when master sound is enabled.
+    /// Play the carriage-return bell when typing sound is enabled.
     pub return_sound: bool,
     /// Selected printing-key sound (`classic`, `deep`, or `soft`).
     pub sound_profile: String,

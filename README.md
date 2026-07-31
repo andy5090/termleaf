@@ -138,13 +138,13 @@ release artifacts.
 | `F2` | toggle Termleaf's optional `Live Korean` composer |
 | `F3` | toggle focus mode |
 | `F4` | toggle the big-font zone |
-| `F5` | toggle system-audio keystroke sound |
+| `F5` | toggle the centered page-width (paper) mode |
 | `F6` | cycle `paper` / `night` / `xt` / `amber` theme |
 | `F7` / `F8` | decrease / increase big-font size across five effective levels |
 | `Alt+L` | cycle document line spacing through levels 1–3 |
-| `Alt+P` | toggle the centered 80-column page-width mode |
+| `Alt+P` | alternate page-width shortcut where the terminal preserves Alt |
 | `F9` | toggle English / Korean interface guidance |
-| `F10` | open detailed sound settings (master / delete / return / key style) |
+| `F10` | open sound settings (typing / delete / return / key style) |
 | `F11` | cycle `classic` / `deep` / `soft` typewriter sound |
 | `Ctrl+O` | open a file (a missing path starts a new file there) |
 | `Ctrl+S` | save; the first save asks for a filename |

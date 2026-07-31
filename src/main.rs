@@ -219,12 +219,6 @@ fn apply(
         }
         Action::ToggleFocus => cfg.focus_mode = !cfg.focus_mode,
         Action::ToggleBigFont => cfg.big_font = !cfg.big_font,
-        Action::ToggleSound => {
-            cfg.sound = !cfg.sound;
-            if cfg.sound {
-                sound.play_key(&cfg.sound_profile);
-            }
-        }
         Action::ToggleTheme => {
             cfg.theme = Theme::next(&cfg.theme).to_string();
             *theme = Theme::by_name(&cfg.theme);
@@ -280,7 +274,6 @@ fn handle_sound_settings_key(
     match key.code {
         KeyCode::Up => active.select_previous(),
         KeyCode::Down => active.select_next(),
-        KeyCode::F(5) => toggle_sound_option(cfg, sound, 0, true),
         KeyCode::F(11) => toggle_sound_option(cfg, sound, 3, true),
         KeyCode::Char(' ') | KeyCode::Right => {
             toggle_sound_option(cfg, sound, active.selected, true);
