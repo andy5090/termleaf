@@ -25,6 +25,8 @@ on the words, and save without leaving the terminal.
 - **Focus mode** — hides all chrome so only your words remain.
 - **Readable page width** — optionally centers writing in an 80-column page on
   wide terminals.
+- **Non-destructive soft wrapping** — long paragraphs wrap at the screen or
+  page edge without adding newline characters to the saved document.
 - **Relaxed line spacing** — defaults to a comfortable one-row gap and cycles
   through three persisted spacing levels.
 - **Open and save in-app** — choose a filename on first save, reopen another

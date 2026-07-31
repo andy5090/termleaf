@@ -7,6 +7,11 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced horizontal scrolling for long document lines with non-destructive
+  soft wrapping at the current screen or page-width boundary.
+
 ## [0.3.0] - 2026-07-31
 
 ### Added

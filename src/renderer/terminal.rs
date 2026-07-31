@@ -540,14 +540,12 @@ fn draw_document(
     theme: &Theme,
     layout: &Layout,
 ) -> io::Result<(Option<u16>, Option<u16>)> {
-    let lines = editor.lines();
-    let cur = editor.cursor();
-    let composing: Vec<char> = editor.composing().chars().collect();
     let (left_margin, content_width) = writing_column(cfg, layout.cols);
     let line_spacing = cfg.line_spacing.max(1);
     let line_capacity = visible_line_capacity(layout.doc_height, line_spacing);
-    let top = if cur.row >= line_capacity {
-        cur.row - line_capacity + 1
+    let (visual_rows, cursor_row) = document_visual_rows(editor, content_width);
+    let top = if cursor_row >= line_capacity {
+        cursor_row - line_capacity + 1
     } else {
         0
     };
@@ -555,48 +553,129 @@ fn draw_document(
     let mut caret = (None, None);
     for i in 0..line_capacity {
         let idx = top + i;
-        if idx >= lines.len() {
+        let Some(row) = visual_rows.get(idx) else {
             break;
-        }
+        };
         let y = layout.doc_top + i as u16 * line_spacing;
-        if idx == cur.row {
-            let line = &lines[idx];
-            let split = cur.col.min(line.len());
-            let mut display = line.clone();
-            display.splice(split..split, composing.iter().copied());
-            let composition_end = split + composing.len();
-            let (start, end) = visible_char_range(&display, composition_end, content_width);
 
-            let before_end = end.min(split);
-            let mut x = left_margin;
-            if start < before_end {
-                x = print_chars(out, x, y, &display[start..before_end], theme.fg, theme.bg)?;
-            }
+        let mut x = left_margin;
+        if row.composition_start > 0 {
+            x = print_chars(
+                out,
+                x,
+                y,
+                &row.chars[..row.composition_start],
+                theme.fg,
+                theme.bg,
+            )?;
+        }
+        if row.composition_start < row.composition_end {
+            x = print_chars(
+                out,
+                x,
+                y,
+                &row.chars[row.composition_start..row.composition_end],
+                theme.accent,
+                theme.bg,
+            )?;
+        }
+        if row.composition_end < row.chars.len() {
+            print_chars(
+                out,
+                x,
+                y,
+                &row.chars[row.composition_end..],
+                theme.fg,
+                theme.bg,
+            )?;
+        }
 
-            let composition_start = start.max(split);
-            let composition_visible_end = end.min(composition_end);
-            if composition_start < composition_visible_end {
-                x = print_chars(
-                    out,
-                    x,
-                    y,
-                    &display[composition_start..composition_visible_end],
-                    theme.accent,
-                    theme.bg,
-                )?;
-            }
-
-            caret = (Some(x), Some(y));
-            let after_start = start.max(composition_end);
-            if after_start < end {
-                print_chars(out, x, y, &display[after_start..end], theme.fg, theme.bg)?;
-            }
-        } else {
-            let (_, end) = visible_char_range(&lines[idx], 0, content_width);
-            print_chars(out, left_margin, y, &lines[idx][..end], theme.fg, theme.bg)?;
+        if let Some(caret_col) = row.caret {
+            let caret_x = left_margin
+                + row.chars[..caret_col]
+                    .iter()
+                    .map(|&c| char_width(c))
+                    .sum::<u16>();
+            caret = (Some(caret_x), Some(y));
         }
     }
     Ok(caret)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct VisualRow {
+    chars: Vec<char>,
+    composition_start: usize,
+    composition_end: usize,
+    caret: Option<usize>,
+}
+
+fn document_visual_rows(editor: &Editor, width: u16) -> (Vec<VisualRow>, usize) {
+    let cursor = editor.cursor();
+    let composing: Vec<char> = editor.composing().chars().collect();
+    let mut rows = Vec::new();
+    let mut cursor_row = 0;
+
+    for (logical_row, line) in editor.lines().iter().enumerate() {
+        let is_cursor_line = logical_row == cursor.row;
+        let mut display = line.clone();
+        let insert_at = cursor.col.min(display.len());
+        let (composition_start, composition_end, caret) = if is_cursor_line {
+            display.splice(insert_at..insert_at, composing.iter().copied());
+            (
+                insert_at,
+                insert_at + composing.len(),
+                Some(insert_at + composing.len()),
+            )
+        } else {
+            (0, 0, None)
+        };
+        let ranges = wrapped_char_ranges(&display, width, caret);
+        let caret_range = caret.and_then(|position| {
+            ranges
+                .iter()
+                .rposition(|&(start, end)| position >= start && position <= end)
+        });
+
+        for (range_index, (start, end)) in ranges.into_iter().enumerate() {
+            let local_caret =
+                caret.filter(|_| caret_range.is_some_and(|target| target == range_index));
+            if local_caret.is_some() {
+                cursor_row = rows.len();
+            }
+            rows.push(VisualRow {
+                chars: display[start..end].to_vec(),
+                composition_start: composition_start.clamp(start, end) - start,
+                composition_end: composition_end.clamp(start, end) - start,
+                caret: local_caret.map(|position| position - start),
+            });
+        }
+    }
+
+    (rows, cursor_row)
+}
+
+fn wrapped_char_ranges(line: &[char], width: u16, caret: Option<usize>) -> Vec<(usize, usize)> {
+    let width = width.max(1);
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    let mut used: u16 = 0;
+
+    for (index, &character) in line.iter().enumerate() {
+        let character_width = char_width(character);
+        if index > start && used.saturating_add(character_width) > width {
+            ranges.push((start, index));
+            start = index;
+            used = 0;
+        }
+        used = used.saturating_add(character_width);
+    }
+    ranges.push((start, line.len()));
+
+    if caret == Some(line.len()) && !line.is_empty() && used >= width {
+        ranges.push((line.len(), line.len()));
+    }
+    ranges
 }
 
 fn writing_column(cfg: &Config, terminal_width: u16) -> (u16, u16) {
@@ -618,29 +697,6 @@ fn visible_line_capacity(height: u16, spacing: u16) -> usize {
     } else {
         (height.saturating_sub(1) / spacing.max(1) + 1) as usize
     }
-}
-
-fn visible_char_range(line: &[char], caret: usize, width: u16) -> (usize, usize) {
-    let width = width.max(1);
-    let caret = caret.min(line.len());
-    let mut start = 0;
-    let mut before_width = line[..caret].iter().map(|&c| char_width(c)).sum::<u16>();
-    while start < caret && before_width >= width {
-        before_width = before_width.saturating_sub(char_width(line[start]));
-        start += 1;
-    }
-
-    let mut used: u16 = 0;
-    let mut end = start;
-    while end < line.len() {
-        let next = used.saturating_add(char_width(line[end]));
-        if next > width {
-            break;
-        }
-        used = next;
-        end += 1;
-    }
-    (start, end)
 }
 
 fn draw_big(
@@ -999,10 +1055,35 @@ mod tests {
     }
 
     #[test]
-    fn long_lines_scroll_horizontally_to_keep_the_caret_visible() {
+    fn long_lines_soft_wrap_at_terminal_cell_boundaries() {
         let line: Vec<char> = "a한b".chars().collect();
-        assert_eq!(visible_char_range(&line, 3, 4), (1, 3));
-        assert_eq!(visible_char_range(&line, 3, 3), (2, 3));
+        assert_eq!(wrapped_char_ranges(&line, 3, None), [(0, 2), (2, 3)]);
+        assert_eq!(wrapped_char_ranges(&line, 4, None), [(0, 3)]);
+    }
+
+    #[test]
+    fn caret_moves_to_a_new_visual_row_at_an_exact_boundary() {
+        let line: Vec<char> = "abcd".chars().collect();
+        assert_eq!(
+            wrapped_char_ranges(&line, 4, Some(line.len())),
+            [(0, 4), (4, 4)]
+        );
+    }
+
+    #[test]
+    fn visual_wrapping_does_not_insert_document_newlines() {
+        let mut editor = Editor::new();
+        for character in "ab한cd".chars() {
+            editor.insert_char(character);
+        }
+
+        let (rows, cursor_row) = document_visual_rows(&editor, 4);
+        let displayed: Vec<String> = rows.iter().map(|row| row.chars.iter().collect()).collect();
+
+        assert_eq!(displayed, ["ab한", "cd"]);
+        assert_eq!(cursor_row, 1);
+        assert_eq!(rows[cursor_row].caret, Some(2));
+        assert_eq!(editor.buffer.to_text(), "ab한cd");
     }
 
     #[test]
