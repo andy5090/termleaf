@@ -159,10 +159,11 @@ fn latest_version() -> Result<String, UpdateError> {
         .map_err(|error| UpdateError(format!("cannot run curl: {error}")))?;
 
     if !output.status.success() {
-        return Err(UpdateError(format!(
-            "GitHub release check failed with status {}",
-            output.status
-        )));
+        return Err(curl_error(
+            "GitHub release check failed",
+            output.status.code(),
+            &output.stderr,
+        ));
     }
 
     let effective_url = String::from_utf8(output.stdout)
@@ -180,6 +181,7 @@ fn install_latest(bin_dir: &Path) -> Result<(), UpdateError> {
             LATEST_INSTALLER_URL,
         ])
         .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| UpdateError(format!("cannot download the installer: {error}")))?;
     let installer_input = download
@@ -199,14 +201,16 @@ fn install_latest(bin_dir: &Path) -> Result<(), UpdateError> {
     let installer_status = installer
         .status()
         .map_err(|error| UpdateError(format!("cannot run the installer: {error}")))?;
-    let download_status = download
-        .wait()
+    let download_output = download
+        .wait_with_output()
         .map_err(|error| UpdateError(format!("cannot finish the download: {error}")))?;
 
-    if !download_status.success() {
-        return Err(UpdateError(format!(
-            "installer download failed with status {download_status}"
-        )));
+    if !download_output.status.success() {
+        return Err(curl_error(
+            "Installer download failed",
+            download_output.status.code(),
+            &download_output.stderr,
+        ));
     }
     if !installer_status.success() {
         return Err(UpdateError(format!(
@@ -215,6 +219,31 @@ fn install_latest(bin_dir: &Path) -> Result<(), UpdateError> {
     }
 
     Ok(())
+}
+
+fn curl_error(context: &str, code: Option<i32>, stderr: &[u8]) -> UpdateError {
+    let reason = match code {
+        Some(5) => "the configured proxy address could not be resolved. Check your proxy and DNS settings",
+        Some(6) => "github.com could not be resolved. Check your internet connection and DNS settings",
+        Some(7) => "GitHub could not be reached. Check your internet connection, firewall, or proxy",
+        Some(22) => "GitHub returned an HTTP error. The service or release may be temporarily unavailable",
+        Some(28) => "the connection timed out. Check your internet connection and try again",
+        Some(35) => "the TLS/SSL connection failed. Check your system clock and TLS configuration",
+        Some(60) => "GitHub's TLS certificate could not be verified. Check your system clock and CA certificates",
+        Some(_) => "curl could not complete the request. Check the diagnostic below",
+        None => "curl was interrupted before it could complete the request",
+    };
+    let status = code.map_or_else(|| "unknown".to_owned(), |code| code.to_string());
+    let diagnostic = String::from_utf8_lossy(stderr);
+    let diagnostic = diagnostic.trim();
+
+    if diagnostic.is_empty() {
+        UpdateError(format!("{context}: {reason} (curl exit code {status})"))
+    } else {
+        UpdateError(format!(
+            "{context}: {reason} (curl exit code {status})\nCurl diagnostic: {diagnostic}"
+        ))
+    }
 }
 
 fn cargo_home_for(bin_dir: &Path) -> Option<&Path> {
@@ -338,5 +367,35 @@ mod tests {
             Ordering::Greater
         );
         assert!(compare_versions("development", "0.1.3").is_err());
+    }
+
+    #[test]
+    fn explains_dns_failures_with_an_actionable_message() {
+        let error = curl_error(
+            "GitHub release check failed",
+            Some(6),
+            b"curl: (6) Could not resolve host: github.com\n",
+        );
+
+        assert!(error.0.contains("github.com could not be resolved"));
+        assert!(error.0.contains("internet connection and DNS settings"));
+        assert!(error.0.contains("curl exit code 6"));
+        assert!(error.0.contains("Could not resolve host"));
+    }
+
+    #[test]
+    fn explains_other_common_curl_failures() {
+        for (code, expected) in [
+            (5, "proxy address"),
+            (7, "firewall"),
+            (22, "HTTP error"),
+            (28, "timed out"),
+            (35, "TLS/SSL connection"),
+            (60, "TLS certificate"),
+        ] {
+            assert!(curl_error("Update failed", Some(code), b"")
+                .0
+                .contains(expected));
+        }
     }
 }

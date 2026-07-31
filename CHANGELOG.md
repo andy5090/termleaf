@@ -7,6 +7,14 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-31
+
+### Changed
+
+- Made updater network failures actionable by explaining DNS, proxy,
+  connectivity, timeout, HTTP, and TLS errors while preserving curl's original
+  diagnostic.
+
 ## [0.2.2] - 2026-07-31
 
 ### Fixed
