@@ -7,6 +7,15 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-08-02
+
+### Changed
+
+- Added a one-row top margin above the document when big text is disabled,
+  while preserving all available editing rows in very small terminals.
+- Added `Shift+F5` as a platform-neutral line-spacing shortcut while retaining
+  macOS `Option+L` and Windows/Linux `Alt+L` as terminal-dependent alternates.
+
 ## [0.3.3] - 2026-08-01
 
 ### Changed
@@ -107,7 +116,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/andy5090/termleaf/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/andy5090/termleaf/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/andy5090/termleaf/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/andy5090/termleaf/compare/v0.3.0...v0.3.1

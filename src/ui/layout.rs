@@ -53,8 +53,14 @@ impl Layout {
             }
         }
 
-        let doc_top = big_height;
-        let doc_height = avail.saturating_sub(big_height).max(1);
+        // Without the big-font zone, leave one quiet row above the document
+        // when doing so still preserves at least two editable rows.
+        let top_padding = u16::from(!cfg.big_font && avail >= 3);
+        let doc_top = big_height + top_padding;
+        let doc_height = avail
+            .saturating_sub(big_height)
+            .saturating_sub(top_padding)
+            .max(1);
         let status_row = if status_visible {
             Some(rows.saturating_sub(status_reserve))
         } else {
@@ -110,6 +116,32 @@ mod tests {
         assert_eq!(focused.status_row, None);
         assert_eq!(focused.shortcut_row, None);
         assert_eq!(focused.doc_height, 4);
+    }
+
+    #[test]
+    fn disabled_big_font_adds_top_padding_without_starving_compact_layouts() {
+        let mut cfg = Config {
+            big_font: false,
+            ..Config::default()
+        };
+
+        let normal = Layout::compute(80, 24, &cfg);
+        assert_eq!(normal.doc_top, 1);
+        assert_eq!(normal.doc_height, 21);
+
+        cfg.focus_mode = true;
+        let focused = Layout::compute(80, 24, &cfg);
+        assert_eq!(focused.doc_top, 1);
+        assert_eq!(focused.doc_height, 23);
+
+        let compact = Layout::compute(20, 4, &cfg);
+        assert_eq!(compact.doc_top, 1);
+        assert_eq!(compact.doc_height, 3);
+
+        cfg.focus_mode = false;
+        let constrained = Layout::compute(20, 4, &cfg);
+        assert_eq!(constrained.doc_top, 0);
+        assert_eq!(constrained.doc_height, 2);
     }
 
     #[test]
