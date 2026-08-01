@@ -24,6 +24,11 @@ Termleaf follows Semantic Versioning:
 
 5. Commit and push the release preparation, then confirm the normal CI passed.
 
+To conserve GitHub Actions usage, normal CI runs once per pull request and
+cancels superseded runs. The i686 compatibility build and cargo-dist platform
+matrix run only for version-tag releases; validate i686-sensitive changes
+locally before tagging when possible.
+
 ## Publish
 
 Create and push a tag that exactly matches the Cargo package version:
