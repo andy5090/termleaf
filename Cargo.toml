@@ -1,6 +1,6 @@
 [package]
 name = "termleaf"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 description = "A distraction-free terminal text editor built for focused writing."
 repository = "https://github.com/andy5090/termleaf"
@@ -21,6 +21,12 @@ path = "src/bin/termleaf-update.rs"
 [dependencies]
 crossterm = "0.28"
 rodio = { version = "0.22.2", default-features = false, features = ["playback"] }
+
+[patch.crates-io]
+# CPAL 0.17.3 overflows when converting ALSA timestamps on 32-bit Linux,
+# terminating the audio callback thread on its first buffer. The vendored copy
+# backports upstream RustAudio/cpal#1137 until Rodio accepts CPAL 0.18.
+cpal = { path = "vendor/cpal" }
 
 [profile.release]
 opt-level = 3

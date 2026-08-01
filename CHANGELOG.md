@@ -7,6 +7,14 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-08-02
+
+### Fixed
+
+- Restored typewriter audio on i686 Linux by backporting CPAL's 32-bit-safe
+  ALSA timestamp conversion, letting ALSA choose a device-compatible buffer
+  size, and rebuilding streams after backend failures.
+
 ## [0.3.4] - 2026-08-02
 
 ### Changed
@@ -116,7 +124,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/andy5090/termleaf/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/andy5090/termleaf/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/andy5090/termleaf/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/andy5090/termleaf/compare/v0.3.1...v0.3.2

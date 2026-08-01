@@ -37,8 +37,6 @@ const BACKSPACE_WAV: &[u8] = include_bytes!("../assets/typewriter-backspace.wav"
 const RETURN_WAV: &[u8] = include_bytes!("../assets/typewriter-return.wav");
 const BACKSPACE_MIN_INTERVAL: Duration = Duration::from_millis(55);
 const STREAM_RETRY_INTERVAL: Duration = Duration::from_secs(2);
-#[cfg(all(target_os = "linux", target_arch = "x86"))]
-const I686_STABILITY_BUFFER_FRAMES: u32 = 4_096;
 
 struct Clip {
     samples: Vec<f32>,
@@ -159,13 +157,6 @@ fn open_stream(stream_healthy: Arc<AtomicBool>) -> Option<MixerDeviceSink> {
     let callback_state = Arc::clone(&stream_healthy);
     let builder = DeviceSinkBuilder::from_default_device().ok()?;
 
-    // Older 32-bit x86 machines have less scheduling headroom. Rodio documents
-    // 2048-4096 frames as its stability-focused range, so use the upper bound
-    // there while retaining the lower-latency default on other targets.
-    #[cfg(all(target_os = "linux", target_arch = "x86"))]
-    let builder =
-        builder.with_buffer_size(rodio::cpal::BufferSize::Fixed(I686_STABILITY_BUFFER_FRAMES));
-
     builder
         .with_error_callback(move |error| {
             if stream_error_requires_rebuild(&error) {
@@ -183,10 +174,7 @@ fn open_stream(stream_healthy: Arc<AtomicBool>) -> Option<MixerDeviceSink> {
 }
 
 fn stream_error_requires_rebuild(error: &StreamError) -> bool {
-    matches!(
-        error,
-        StreamError::DeviceNotAvailable | StreamError::StreamInvalidated
-    )
+    !matches!(error, StreamError::BufferUnderrun)
 }
 
 fn backspace_playback_allowed(last: Option<Instant>, now: Instant) -> bool {
@@ -256,6 +244,7 @@ fn decode_pcm_wave(wav: &[u8]) -> Option<(u16, u32, Vec<f32>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
 
     fn embedded_wavs() -> Vec<&'static [u8]> {
         TYPEWRITER_WAVS
@@ -428,7 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn only_device_loss_and_invalidated_streams_require_a_rebuild() {
+    fn backend_failures_require_a_rebuild_but_transient_underruns_do_not() {
         assert!(!stream_error_requires_rebuild(&StreamError::BufferUnderrun));
         assert!(stream_error_requires_rebuild(
             &StreamError::DeviceNotAvailable
@@ -436,7 +425,7 @@ mod tests {
         assert!(stream_error_requires_rebuild(
             &StreamError::StreamInvalidated
         ));
-        assert!(!stream_error_requires_rebuild(
+        assert!(stream_error_requires_rebuild(
             &StreamError::BackendSpecific {
                 err: rodio::cpal::BackendSpecificError {
                     description: "`alsa::poll()` returned POLLERR".into(),
@@ -457,5 +446,17 @@ mod tests {
             Some(start),
             start + STREAM_RETRY_INTERVAL
         ));
+    }
+
+    /// Exercise the real output callback when diagnosing a supported machine.
+    /// This stays ignored because CI and cross-build hosts may have no speaker.
+    #[test]
+    #[ignore = "requires a working default audio output device"]
+    fn hardware_audio_callback_stays_alive() {
+        let player = SoundPlayer::new();
+        assert!(player.stream.borrow().is_some(), "audio stream should open");
+        player.play_key("classic");
+        thread::sleep(Duration::from_millis(500));
+        assert!(player.stream_healthy.load(Ordering::Acquire));
     }
 }
