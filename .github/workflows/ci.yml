@@ -1,10 +1,13 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -40,7 +43,3 @@ jobs:
 
       - name: Build (release)
         run: cargo build --release --verbose
-
-  linux-i686:
-    name: Build & Test Linux i686
-    uses: ./.github/workflows/build-i686.yml
