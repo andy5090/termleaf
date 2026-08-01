@@ -139,10 +139,11 @@ release artifacts.
 | `F3` | toggle focus mode |
 | `F4` | toggle the big-font zone |
 | `F5` | toggle the centered page-width (paper) mode |
+| `Shift+F5` | cycle document line spacing through levels 1–3 |
 | `F6` | cycle `paper` / `night` / `xt` / `amber` theme |
 | `F7` / `F8` | decrease / increase big-font size across five effective levels |
-| `Alt+L` | cycle document line spacing through levels 1–3 |
-| `Alt+P` | alternate page-width shortcut where the terminal preserves Alt |
+| `Option+L` (macOS) / `Alt+L` (Windows/Linux) | alternate line-spacing shortcut |
+| `Option+P` (macOS) / `Alt+P` (Windows/Linux) | alternate page-width shortcut |
 | `F9` | toggle English / Korean interface guidance |
 | `F10` | open sound settings (typing / delete / return / key style) |
 | `F11` | cycle `classic` / `deep` / `soft` typewriter sound |
@@ -152,6 +153,12 @@ release artifacts.
 | `Ctrl+Shift+S` | save as when the terminal preserves the Shift modifier |
 | `Ctrl+Q` / `Ctrl+C` | quit |
 | arrows / Home / End / Backspace / Delete / Enter | usual editing |
+
+`Ctrl` means the Control key on every operating system, not macOS Command or
+the Windows key. macOS Option is the equivalent of Alt in terminal input;
+Termleaf does not bind Command or the Windows key. Depending on macOS keyboard
+settings, function-key shortcuts may require `Fn` as well—for example,
+`Fn+Shift+F5` for line spacing.
 
 `Enter` plays a typewriter margin bell and carriage-return effect. In the
 `F10` panel, use `↑`/`↓` to select an option, `Space` or `←`/`→` to change it,
