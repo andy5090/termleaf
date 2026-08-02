@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
+import test from "node:test";
+
+const templateRoot = new URL("../", import.meta.url);
+
+async function render({ acceptLanguage, cookie } = {}) {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+
+  const requestHeaders = new Headers({ accept: "text/html" });
+  if (acceptLanguage) requestHeaders.set("accept-language", acceptLanguage);
+  if (cookie) requestHeaders.set("cookie", cookie);
+
+  return worker.fetch(
+    new Request("http://localhost/", { headers: requestHeaders }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+}
+
+test("server-renders English as the default locale", async () => {
+  const response = await render();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+
+  const html = await response.text();
+  assert.match(html, /<html lang="en">/i);
+  assert.match(html, /<title>Termleaf — Write\. Nothing else\.<\/title>/i);
+  assert.match(html, /Write\./);
+  assert.match(html, /Nothing else\./);
+  assert.match(html, /v0\.3\.5/);
+  assert.match(html, /termleaf-installer\.sh/);
+  assert.match(html, /Real-recorded typewriter sound/);
+  assert.match(html, /One command gets you set up/);
+  assert.match(html, /aria-label="Language"/);
+  assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
+});
+
+test("serves Korean for a Korean browser", async () => {
+  const response = await render({ acceptLanguage: "ko-KR,ko;q=0.9,en;q=0.8" });
+  const html = await response.text();
+
+  assert.match(html, /<html lang="ko">/i);
+  assert.match(html, /<title>Termleaf — 터미널에, 글만 남기다<\/title>/i);
+  assert.match(html, /그 순간 화면에는 글만 남습니다\./);
+  assert.match(html, /한 줄이면 설치가 끝납니다\./);
+  assert.doesNotMatch(html, /Markdown 기본/);
+  assert.match(html, /aria-label="언어"/);
+});
+
+test("stored language preference overrides the browser locale", async () => {
+  const response = await render({
+    acceptLanguage: "ko-KR,ko;q=0.9",
+    cookie: "termleaf-locale=en",
+  });
+  const html = await response.text();
+
+  assert.match(html, /<html lang="en">/i);
+  assert.match(html, /Termleaf — Write\. Nothing else\./);
+});
+
+test("removes the disposable starter surface", async () => {
+  const [page, layout, packageJson] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.doesNotMatch(page, /_sites-preview|SkeletonPreview/);
+  assert.doesNotMatch(layout, /Starter Project|codex-preview/);
+  assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+  await assert.rejects(access(new URL("../app/_sites-preview", templateRoot)));
+});
