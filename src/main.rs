@@ -10,6 +10,7 @@ mod editor;
 mod input;
 mod renderer;
 mod ui;
+mod update;
 
 use std::ffi::OsString;
 use std::io;
@@ -30,6 +31,17 @@ fn main() -> io::Result<()> {
         Ok(StartupRequest::Edit(path)) => path,
         Ok(StartupRequest::Help) => {
             print_help();
+            return Ok(());
+        }
+        Ok(StartupRequest::UpdateHelp) => {
+            print_update_help();
+            return Ok(());
+        }
+        Ok(StartupRequest::Update { force }) => {
+            if let Err(error) = update::run(force) {
+                eprintln!("termleaf update: {error}");
+                std::process::exit(1);
+            }
             return Ok(());
         }
         Ok(StartupRequest::Version) => {
@@ -130,6 +142,8 @@ fn main() -> io::Result<()> {
 enum StartupRequest {
     Edit(Option<PathBuf>),
     Help,
+    Update { force: bool },
+    UpdateHelp,
     Version,
 }
 
@@ -138,6 +152,17 @@ fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
         [] => Ok(StartupRequest::Edit(None)),
         [flag] if flag == "-h" || flag == "--help" => Ok(StartupRequest::Help),
         [flag] if flag == "-V" || flag == "--version" => Ok(StartupRequest::Version),
+        [command] if command == "update" => Ok(StartupRequest::Update { force: false }),
+        [command, flag] if command == "update" && flag == "--force" => {
+            Ok(StartupRequest::Update { force: true })
+        }
+        [command, flag] if command == "update" && (flag == "-h" || flag == "--help") => {
+            Ok(StartupRequest::UpdateHelp)
+        }
+        [command, option] if command == "update" => Err(format!(
+            "unknown update option '{}'; try 'termleaf update --help'",
+            option.to_string_lossy()
+        )),
         [separator, path] if separator == "--" => {
             Ok(StartupRequest::Edit(Some(PathBuf::from(path))))
         }
@@ -153,7 +178,12 @@ fn print_help() {
     println!(
         "Termleaf {version} — focused writing in the terminal
 
-Usage: termleaf [FILE]
+Usage:
+  termleaf [FILE]
+  termleaf update [--force]
+
+Commands:
+  update           Update to the latest GitHub release
 
 Arguments:
   [FILE]           Open a document, or create it when first saved
@@ -164,6 +194,18 @@ Options:
 
 Inside Termleaf, press F1 for editing shortcuts and input guidance.",
         version = env!("CARGO_PKG_VERSION")
+    );
+}
+
+fn print_update_help() {
+    println!(
+        "Update Termleaf to the latest GitHub release.
+
+Usage: termleaf update [OPTIONS]
+
+Options:
+      --force      Reinstall even when the installed version is current
+  -h, --help       Show this help"
     );
 }
 
@@ -518,12 +560,33 @@ mod tests {
             parse_startup_args(args(&["--", "-draft.md"])),
             Ok(StartupRequest::Edit(Some(PathBuf::from("-draft.md"))))
         );
+        assert_eq!(
+            parse_startup_args(args(&["--", "update"])),
+            Ok(StartupRequest::Edit(Some(PathBuf::from("update"))))
+        );
+    }
+
+    #[test]
+    fn startup_arguments_support_the_update_command() {
+        assert_eq!(
+            parse_startup_args(args(&["update"])),
+            Ok(StartupRequest::Update { force: false })
+        );
+        assert_eq!(
+            parse_startup_args(args(&["update", "--force"])),
+            Ok(StartupRequest::Update { force: true })
+        );
+        assert_eq!(
+            parse_startup_args(args(&["update", "--help"])),
+            Ok(StartupRequest::UpdateHelp)
+        );
     }
 
     #[test]
     fn startup_arguments_reject_unknown_options_and_extra_paths() {
         assert!(parse_startup_args(args(&["--unknown"])).is_err());
         assert!(parse_startup_args(args(&["one.md", "two.md"])).is_err());
+        assert!(parse_startup_args(args(&["update", "--unknown"])).is_err());
     }
 
     #[test]

@@ -78,43 +78,30 @@ Release history is maintained in the [changelog](CHANGELOG.md).
 
 ### Update or uninstall
 
-Existing curl installations can always be updated by running the installation
-command again. The installer also includes an updater that compares the latest
-release with the version reported by the installed Termleaf executable:
+Termleaf checks the latest published release and updates itself with one command:
 
 ```bash
-termleaf-update
+termleaf update
 ```
 
 To repair an incomplete installation or reinstall the current release:
 
 ```bash
-termleaf-update --force
+termleaf update --force
 ```
+
+To open a document literally named `update`, separate it from commands with
+`termleaf -- update`.
 
 To uninstall a curl installation, first print the exact installed paths:
 
 ```bash
 command -v termleaf
-command -v termleaf-update
 ```
 
-Remove only the files printed by those commands. The default paths are
-`$HOME/.cargo/bin/termleaf` and `$HOME/.cargo/bin/termleaf-update`. Keep Cargo's
-shared `env`/`env.fish` files and the directory's `PATH` entry if other Cargo
-tools are installed there.
-
-Package-manager installations should be managed by the same package manager:
-
-```bash
-# Future Homebrew package
-brew upgrade termleaf
-brew uninstall termleaf
-
-# Cargo installation
-cargo install termleaf --locked
-cargo uninstall termleaf
-```
+Remove only the file printed by that command. The default path is
+`$HOME/.cargo/bin/termleaf`. Keep Cargo's shared `env`/`env.fish` files and the
+directory's `PATH` entry if other Cargo tools are installed there.
 
 ### Build from source
 
@@ -125,9 +112,7 @@ cargo install --path . --locked
 ```
 
 Linux source builds require the ALSA development package, commonly
-`libasound2-dev` on Debian and Ubuntu. Homebrew and native Linux packages are
-planned as additional installation paths; they will reuse the same GitHub
-release artifacts.
+`libasound2-dev` on Debian and Ubuntu.
 
 ## Keybindings
 

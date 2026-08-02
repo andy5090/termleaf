@@ -7,6 +7,11 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Consolidated self-updates into `termleaf update [--force]` and removed the
+  separate `termleaf-update` executable from release archives and the installer.
+
 ## [0.3.5] - 2026-08-02
 
 ### Fixed

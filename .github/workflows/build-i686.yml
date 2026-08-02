@@ -51,7 +51,7 @@ jobs:
         run: cargo test --locked --all-features --target i686-unknown-linux-gnu
 
       - name: Build i686 release
-        run: cargo build --locked --profile dist --target i686-unknown-linux-gnu --bins
+        run: cargo build --locked --profile dist --target i686-unknown-linux-gnu --bin termleaf
 
       - name: Verify and package i686 release
         shell: bash
@@ -61,12 +61,10 @@ jobs:
           archive_root="target/distrib/termleaf-${target}"
           mkdir -p "$archive_root"
           cp "target/${target}/dist/termleaf" "$archive_root/"
-          cp "target/${target}/dist/termleaf-update" "$archive_root/"
           cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "$archive_root/"
 
           file "$archive_root/termleaf" | grep -F "ELF 32-bit"
           "$archive_root/termleaf" --version
-          "$archive_root/termleaf-update" --version
 
           tar -C target/distrib -cJf "${archive_root}.tar.xz" "termleaf-${target}"
           (

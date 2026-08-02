@@ -3,7 +3,7 @@ use std::{
     env,
     ffi::OsStr,
     fmt,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Command, Stdio},
 };
 
@@ -13,7 +13,7 @@ const LATEST_INSTALLER_URL: &str =
     "https://github.com/andy5090/termleaf/releases/latest/download/termleaf-installer.sh";
 
 #[derive(Debug)]
-struct UpdateError(String);
+pub(crate) struct UpdateError(String);
 
 impl fmt::Display for UpdateError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -21,21 +21,12 @@ impl fmt::Display for UpdateError {
     }
 }
 
-fn main() {
-    if let Err(error) = run() {
-        eprintln!("termleaf-update: {error}");
-        std::process::exit(1);
-    }
-}
-
-fn run() -> Result<(), UpdateError> {
-    let force = parse_args()?;
-    let updater_path = env::current_exe()
-        .map_err(|error| UpdateError(format!("cannot locate the updater: {error}")))?;
-    let bin_dir = updater_path
+pub(crate) fn run(force: bool) -> Result<(), UpdateError> {
+    let termleaf_path = env::current_exe()
+        .map_err(|error| UpdateError(format!("cannot locate Termleaf: {error}")))?;
+    let bin_dir = termleaf_path
         .parent()
         .ok_or_else(|| UpdateError("cannot determine the installation directory".into()))?;
-    let termleaf_path = bin_dir.join(executable_name("termleaf"));
     let installed = match installed_version(&termleaf_path) {
         Ok(version) => Some(version),
         Err(_) if force => None,
@@ -89,36 +80,6 @@ fn run() -> Result<(), UpdateError> {
 
     println!("Termleaf {updated} installed successfully.");
     Ok(())
-}
-
-fn parse_args() -> Result<bool, UpdateError> {
-    let mut force = false;
-    for argument in env::args().skip(1) {
-        match argument.as_str() {
-            "--force" => force = true,
-            "-h" | "--help" => {
-                println!(
-                    "Update Termleaf to the latest GitHub release.\n\n\
-                     Usage: termleaf-update [OPTIONS]\n\n\
-                     Options:\n  \
-                       --force       Reinstall even when the installed version is current\n  \
-                     -h, --help     Print help\n  \
-                     -V, --version  Print updater version"
-                );
-                std::process::exit(0);
-            }
-            "-V" | "--version" => {
-                println!("termleaf-update {}", env!("CARGO_PKG_VERSION"));
-                std::process::exit(0);
-            }
-            unknown => {
-                return Err(UpdateError(format!(
-                    "unknown option {unknown:?}; run termleaf-update --help"
-                )));
-            }
-        }
-    }
-    Ok(force)
 }
 
 fn installed_version(termleaf_path: &Path) -> Result<String, UpdateError> {
@@ -250,17 +211,6 @@ fn cargo_home_for(bin_dir: &Path) -> Option<&Path> {
     (bin_dir.file_name() == Some(OsStr::new("bin")))
         .then(|| bin_dir.parent())
         .flatten()
-}
-
-fn executable_name(name: &str) -> PathBuf {
-    #[cfg(windows)]
-    {
-        PathBuf::from(format!("{name}.exe"))
-    }
-    #[cfg(not(windows))]
-    {
-        PathBuf::from(name)
-    }
 }
 
 fn parse_termleaf_version(output: &str) -> Result<String, UpdateError> {

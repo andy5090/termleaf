@@ -14,8 +14,8 @@ targets = [
 local-artifacts-jobs = ["./build-i686"]
 install-path = "CARGO_HOME"
 hosting = "github"
-# Termleaf ships its own updater so version checks use the installed executable,
-# rather than cargo-dist's receipt metadata.
+# `termleaf update` uses the installed executable version and the shared release
+# installer rather than cargo-dist's receipt metadata.
 install-updater = false
 
 [dist.dependencies.apt]

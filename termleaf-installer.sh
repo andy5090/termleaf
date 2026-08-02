@@ -160,10 +160,7 @@ fi
 tar -xJf "$temporary_dir/$archive_name" -C "$temporary_dir"
 archive_root="$temporary_dir/${archive_name%.tar.xz}"
 
-for binary_name in termleaf termleaf-update; do
-    [ -f "$archive_root/$binary_name" ] ||
-        die "release archive is missing $binary_name"
-done
+[ -f "$archive_root/termleaf" ] || die "release archive is missing termleaf"
 
 if [ -n "${CARGO_HOME:-}" ]; then
     cargo_home=${CARGO_HOME%/}
@@ -175,12 +172,10 @@ fi
 bin_dir="$cargo_home/bin"
 mkdir -p "$bin_dir"
 
-for binary_name in termleaf termleaf-update; do
-    staging_path="$bin_dir/.$binary_name.termleaf-install.$$"
-    cp "$archive_root/$binary_name" "$staging_path"
-    chmod 755 "$staging_path"
-    mv -f "$staging_path" "$bin_dir/$binary_name"
-done
+staging_path="$bin_dir/.termleaf.termleaf-install.$$"
+cp "$archive_root/termleaf" "$staging_path"
+chmod 755 "$staging_path"
+mv -f "$staging_path" "$bin_dir/termleaf"
 
 path_changed=0
 case ":${PATH:-}:" in
@@ -218,7 +213,7 @@ EOF
         ;;
 esac
 
-say "Installed termleaf and termleaf-update in $bin_dir"
+say "Installed termleaf in $bin_dir"
 if [ "$path_changed" -eq 1 ]; then
     say "Open a new terminal before running termleaf."
 elif ! command -v termleaf >/dev/null 2>&1; then
