@@ -35,6 +35,9 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /Real-recorded typewriter sound/);
   assert.match(html, /One command gets you set up/);
   assert.match(html, /aria-label="Language"/);
+  assert.match(html, /favicon\.ico/);
+  assert.match(html, /favicon\.png/);
+  assert.match(html, /apple-touch-icon\.png/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
 });
 
@@ -71,5 +74,10 @@ test("removes the disposable starter surface", async () => {
   assert.doesNotMatch(page, /_sites-preview|SkeletonPreview/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+  await Promise.all([
+    access(new URL("public/favicon.ico", templateRoot)),
+    access(new URL("public/favicon.png", templateRoot)),
+    access(new URL("public/apple-touch-icon.png", templateRoot)),
+  ]);
   await assert.rejects(access(new URL("../app/_sites-preview", templateRoot)));
 });
