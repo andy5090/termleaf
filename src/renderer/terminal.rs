@@ -2,7 +2,7 @@
 
 use std::io::{self, Stdout};
 
-use crossterm::style::{Print, SetBackgroundColor, SetForegroundColor};
+use crossterm::style::{Color, Print, SetBackgroundColor, SetForegroundColor};
 use crossterm::{cursor, queue, terminal, SynchronizedUpdate};
 
 use super::font::{glyph_for, Glyph};
@@ -801,12 +801,7 @@ fn draw_glyph(
         for x in 0..g.width {
             let top = g.lit(x, top_y);
             let bottom = expanded_y + 1 < expanded_height && g.lit(x, bottom_y);
-            let (symbol, foreground, background) = match (top, bottom) {
-                (true, true) => ('█', theme.pixel, theme.bg),
-                (true, false) => ('▀', theme.pixel, theme.pixel_off),
-                (false, true) => ('▄', theme.pixel, theme.pixel_off),
-                (false, false) => ('█', theme.pixel_off, theme.bg),
-            };
+            let (symbol, foreground, background) = pixel_cell(top, bottom, theme);
             let pixels: String = std::iter::repeat_n(symbol, scale_x as usize).collect();
             queue!(
                 out,
@@ -818,6 +813,17 @@ fn draw_glyph(
         }
     }
     Ok(())
+}
+
+fn pixel_cell(top: bool, bottom: bool, theme: &Theme) -> (char, Color, Color) {
+    match (top, bottom) {
+        (true, true) => ('█', theme.pixel, theme.bg),
+        (true, false) => ('▀', theme.pixel, theme.pixel_off),
+        (false, true) => ('▄', theme.pixel, theme.pixel_off),
+        // A real space keeps glyphs legible when NO_COLOR suppresses the
+        // foreground color that normally distinguishes the faint pixel grid.
+        (false, false) => (' ', theme.pixel_off, theme.bg),
+    }
 }
 
 fn draw_status(
@@ -1082,6 +1088,25 @@ mod tests {
     fn taller_terminals_keep_the_largest_levels_proportional() {
         assert_eq!(fitted_scales(4, 5, 5), (4, 4));
         assert_eq!(fitted_scales(5, 5, 5), (5, 5));
+    }
+
+    #[test]
+    fn blank_big_pixels_remain_empty_without_terminal_colors() {
+        let theme = Theme::by_name("night");
+
+        assert_eq!(pixel_cell(true, true, &theme), ('█', theme.pixel, theme.bg));
+        assert_eq!(
+            pixel_cell(false, false, &theme),
+            (' ', theme.pixel_off, theme.bg)
+        );
+        assert_eq!(
+            pixel_cell(true, false, &theme),
+            ('▀', theme.pixel, theme.pixel_off)
+        );
+        assert_eq!(
+            pixel_cell(false, true, &theme),
+            ('▄', theme.pixel, theme.pixel_off)
+        );
     }
 
     #[test]
