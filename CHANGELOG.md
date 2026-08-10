@@ -7,10 +7,22 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-08-10
+
+### Added
+
+- Launched the English-first, Korean-localized Termleaf website at
+  [termleaf.com](https://termleaf.com) with an actual macOS Terminal capture.
+
 ### Changed
 
 - Consolidated self-updates into `termleaf update [--force]` and removed the
   separate `termleaf-update` executable from release archives and the installer.
+
+### Fixed
+
+- Kept enlarged pixel text legible when `NO_COLOR` disables terminal colors by
+  rendering unlit pixels as empty cells instead of indistinguishable blocks.
 
 ## [0.3.5] - 2026-08-02
 
@@ -129,7 +141,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/andy5090/termleaf/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/andy5090/termleaf/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/andy5090/termleaf/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/andy5090/termleaf/compare/v0.3.2...v0.3.3
