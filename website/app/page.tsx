@@ -23,8 +23,6 @@ const content = {
     },
     terminal: {
       label: "Example of the Termleaf writing screen",
-      badge: "LIVE CAPTURE",
-      caption: "Actual macOS Terminal",
     },
     manifesto: {
       kicker: "WHY TERMLEAF",
@@ -108,8 +106,6 @@ const content = {
     },
     terminal: {
       label: "Termleaf 편집 화면 예시",
-      badge: "LIVE CAPTURE",
-      caption: "실제 macOS 터미널",
     },
     manifesto: {
       kicker: "WHY TERMLEAF",
@@ -248,21 +244,28 @@ export default async function Home() {
 
         <figure className="terminal-stage">
           <div className="paper-shadow" aria-hidden="true" />
-          <div className="terminal-capture-frame">
-            <img
-              src="/termleaf-terminal.png"
-              alt={copy.terminal.label}
-              width="2000"
-              height="1280"
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-            />
+          <div className="terminal-window-shell">
+            <div className="terminal-titlebar" aria-hidden="true">
+              <span className="window-controls">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span>termleaf — termleaf-demo.md</span>
+              <span />
+            </div>
+            <div className="terminal-capture-frame">
+              <img
+                src="/termleaf-terminal.png"
+                alt={copy.terminal.label}
+                width="2000"
+                height="1280"
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+              />
+            </div>
           </div>
-          <figcaption className="stage-note">
-            <span>{copy.terminal.badge}</span>
-            <span>{copy.terminal.caption}</span>
-          </figcaption>
         </figure>
       </section>
 

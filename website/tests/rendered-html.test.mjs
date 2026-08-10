@@ -47,7 +47,8 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /Real-recorded typewriter sound/);
   assert.match(html, /One command gets you set up/);
   assert.match(html, /src="\/termleaf-terminal\.png"/);
-  assert.match(html, /Actual macOS Terminal/);
+  assert.match(html, /termleaf — termleaf-demo\.md/);
+  assert.doesNotMatch(html, /LIVE CAPTURE|Actual macOS Terminal|실제 macOS 터미널/i);
   assert.match(html, /aria-label="Language"/);
   assert.match(html, /favicon\.ico/);
   assert.match(html, /favicon\.png/);
