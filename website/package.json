@@ -11,9 +11,9 @@
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "pnpm run build && node --test tests/rendered-html.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "deploy": "pnpm run build && wrangler deploy --config dist/server/wrangler.json --name termleaf-writing",
-    "deploy:dry-run": "pnpm run build && wrangler deploy --config dist/server/wrangler.json --name termleaf-writing --dry-run",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .cloudflare",
+    "deploy": "npx cf build && node scripts/prepare-cloudflare-output.mjs && NODE_PATH=./node_modules npx cf deploy --prebuilt",
+    "deploy:dry-run": "npx cf build && node scripts/prepare-cloudflare-output.mjs && NODE_PATH=./node_modules npx cf deploy --prebuilt --dry-run",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
@@ -22,13 +22,13 @@
     "react-dom": "19.2.6"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/vite-plugin": "1.50.0",
     "@tailwindcss/postcss": "4.2.1",
-    "@typescript-eslint/eslint-plugin": "8.59.3",
-    "@typescript-eslint/parser": "8.59.3",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@typescript-eslint/eslint-plugin": "8.59.3",
+    "@typescript-eslint/parser": "8.59.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
     "drizzle-kit": "0.31.10",
@@ -40,7 +40,7 @@
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.118.0"
   },
   "type": "module"
 }

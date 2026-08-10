@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /.vinext/
+/.cloudflare/
 /out/
 
 # misc
@@ -36,6 +37,8 @@ yarn-error.log*
 
 # typescript
 next-env.d.ts
+worker-configuration.d.ts
+*.tsbuildinfo
 /dist/
 /.wrangler/
 /outputs/

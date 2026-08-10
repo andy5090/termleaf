@@ -4,7 +4,7 @@ import test from "node:test";
 
 const templateRoot = new URL("../", import.meta.url);
 
-async function render({ acceptLanguage, cookie } = {}) {
+async function render({ acceptLanguage, cookie, url = "http://localhost/" } = {}) {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
@@ -14,11 +14,23 @@ async function render({ acceptLanguage, cookie } = {}) {
   if (cookie) requestHeaders.set("cookie", cookie);
 
   return worker.fetch(
-    new Request("http://localhost/", { headers: requestHeaders }),
+    new Request(url, { headers: requestHeaders }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
+
+test("redirects the www hostname to the canonical domain", async () => {
+  const response = await render({
+    url: "https://www.termleaf.com/install?source=www",
+  });
+
+  assert.equal(response.status, 308);
+  assert.equal(
+    response.headers.get("location"),
+    "https://termleaf.com/install?source=www",
+  );
+});
 
 test("server-renders English as the default locale", async () => {
   const response = await render();
@@ -30,10 +42,12 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /<title>Termleaf — Write\. Nothing else\.<\/title>/i);
   assert.match(html, /Write\./);
   assert.match(html, /Nothing else\./);
-  assert.match(html, /v0\.3\.5/);
+  assert.match(html, /v0\.3\.6/);
   assert.match(html, /termleaf-installer\.sh/);
   assert.match(html, /Real-recorded typewriter sound/);
   assert.match(html, /One command gets you set up/);
+  assert.match(html, /src="\/termleaf-terminal\.png"/);
+  assert.match(html, /Actual macOS Terminal/);
   assert.match(html, /aria-label="Language"/);
   assert.match(html, /favicon\.ico/);
   assert.match(html, /favicon\.png/);
@@ -78,6 +92,7 @@ test("removes the disposable starter surface", async () => {
     access(new URL("public/favicon.ico", templateRoot)),
     access(new URL("public/favicon.png", templateRoot)),
     access(new URL("public/apple-touch-icon.png", templateRoot)),
+    access(new URL("public/termleaf-terminal.png", templateRoot)),
   ]);
   await assert.rejects(access(new URL("../app/_sites-preview", templateRoot)));
 });

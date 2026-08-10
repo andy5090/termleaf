@@ -23,15 +23,8 @@ const content = {
     },
     terminal: {
       label: "Example of the Termleaf writing screen",
-      bigType: ["W", "R", "I", "T", "E"],
-      lines: [
-        "One sentence at a time.",
-        "As thought becomes text,",
-        "the page stays clear.",
-      ],
-      lineCount: "3 lines",
-      saved: "saved",
-      shortcuts: "F3 focus  F4 big type  F5 paper width  ⇧F5 spacing",
+      badge: "LIVE CAPTURE",
+      caption: "Actual macOS Terminal",
     },
     manifesto: {
       kicker: "WHY TERMLEAF",
@@ -115,15 +108,8 @@ const content = {
     },
     terminal: {
       label: "Termleaf 편집 화면 예시",
-      bigType: ["한", "문", "장", "에"],
-      lines: [
-        "한 문장에 집중한다.",
-        "생각이 글이 되는 동안,",
-        "화면에는 글만 남는다.",
-      ],
-      lineCount: "3줄",
-      saved: "저장됨",
-      shortcuts: "F3 집중  F4 큰글자  F5 종이폭  ⇧F5 줄간격",
+      badge: "LIVE CAPTURE",
+      caption: "실제 macOS 터미널",
     },
     manifesto: {
       kicker: "WHY TERMLEAF",
@@ -234,7 +220,7 @@ export default async function Home() {
         <div className="hero-copy">
           <p className="eyebrow">
             <span className="status-dot" aria-hidden="true" />
-            v0.3.5 · macOS &amp; Linux
+            v0.3.6 · macOS &amp; Linux
           </p>
           <h1>
             {copy.hero.headline}
@@ -260,39 +246,24 @@ export default async function Home() {
           </ul>
         </div>
 
-        <div className="terminal-stage" aria-label={copy.terminal.label}>
+        <figure className="terminal-stage">
           <div className="paper-shadow" aria-hidden="true" />
-          <div className="terminal-window">
-            <div className="terminal-titlebar">
-              <span className="window-dots" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-              <span>termleaf — memo.md</span>
-              <span className="terminal-version">v0.3.5</span>
-            </div>
-            <div className="big-type" aria-hidden="true">
-              {copy.terminal.bigType.map((letter, index) => (
-                <span key={`${letter}-${index}`}>{letter}</span>
-              ))}
-            </div>
-            <div className="document-preview">
-              <p>{copy.terminal.lines[0]}</p>
-              <p>{copy.terminal.lines[1]}</p>
-              <p>{copy.terminal.lines[2]}<span className="caret" /></p>
-            </div>
-            <div className="terminal-status">
-              <span>memo.md&nbsp; · &nbsp;{copy.terminal.lineCount}&nbsp; · &nbsp;IME:OS</span>
-              <span>paper&nbsp; · &nbsp;{copy.terminal.saved}</span>
-            </div>
-            <div className="terminal-shortcuts">{copy.terminal.shortcuts}</div>
+          <div className="terminal-capture-frame">
+            <img
+              src="/termleaf-terminal.png"
+              alt={copy.terminal.label}
+              width="2000"
+              height="1280"
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+            />
           </div>
-          <div className="stage-note" aria-hidden="true">
-            <span>ANSI ONLY</span>
-            <span>PLAIN TEXT</span>
-          </div>
-        </div>
+          <figcaption className="stage-note">
+            <span>{copy.terminal.badge}</span>
+            <span>{copy.terminal.caption}</span>
+          </figcaption>
+        </figure>
       </section>
 
       <section className="manifesto" aria-labelledby="manifesto-title">
