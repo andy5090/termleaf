@@ -17,6 +17,43 @@ die() {
     exit 1
 }
 
+run_as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        die "installing Linux audio dependencies requires root or sudo"
+    fi
+}
+
+install_linux_audio_dependencies() {
+    # CPAL uses ALSA on Linux. On Debian-family systems the PulseAudio ALSA
+    # plugin is also required to reach WSLg's audio server when no hardware
+    # ALSA device is exposed inside the distribution.
+    if ! command -v dpkg-query >/dev/null 2>&1 ||
+        ! command -v apt-get >/dev/null 2>&1; then
+        return
+    fi
+
+    missing_packages=""
+    for package_name in libasound2 libasound2-plugins; do
+        if ! dpkg-query -W -f='${Status}' "$package_name" 2>/dev/null |
+            grep -q '^install ok installed$'; then
+            missing_packages="$missing_packages $package_name"
+        fi
+    done
+
+    if [ -n "$missing_packages" ]; then
+        say "Installing Linux audio dependencies:$missing_packages"
+        run_as_root apt-get update
+        # Package names above are fixed constants, so intentional word
+        # splitting passes each missing package as a separate argument.
+        # shellcheck disable=SC2086
+        run_as_root apt-get install --yes $missing_packages
+    fi
+}
+
 usage() {
     cat <<'EOF'
 Usage: termleaf-installer.sh [OPTIONS]
@@ -95,6 +132,8 @@ case "$os_name" in
         if ldd --version 2>&1 | grep -q 'musl'; then
             die "musl Linux is not supported by the prebuilt installer"
         fi
+
+        install_linux_audio_dependencies
         ;;
     *)
         die "unsupported operating system: $os_name"
