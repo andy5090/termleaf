@@ -57,7 +57,9 @@ on the words, and save without leaving the terminal.
 
 The installer detects Apple Silicon, Intel macOS, x86_64 Linux, or 32-bit x86
 Linux (`i686`), verifies the release archive, and installs `termleaf` into
-Cargo's conventional binary directory:
+Cargo's conventional binary directory. On Debian and Ubuntu, it also installs
+any missing ALSA runtime packages. This includes the PulseAudio plugin used by
+WSLg to route sound to Windows:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
@@ -105,14 +107,24 @@ directory's `PATH` entry if other Cargo tools are installed there.
 
 ### Build from source
 
+On Debian and Ubuntu, install the build and audio runtime dependencies first:
+
+```bash
+sudo apt-get update
+sudo apt-get install --yes pkg-config libasound2-dev libasound2-plugins
+```
+
+Then build Termleaf:
+
 ```bash
 git clone https://github.com/andy5090/termleaf.git
 cd termleaf
 cargo install --path . --locked
 ```
 
-Linux source builds require the ALSA development package, commonly
-`libasound2-dev` on Debian and Ubuntu.
+Other Linux distributions need their equivalent ALSA development package and,
+when the desktop audio server is PulseAudio or PipeWire, the corresponding ALSA
+plugin.
 
 ## Keybindings
 
