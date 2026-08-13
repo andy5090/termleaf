@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Termleaf typewriter prompt T logo concept</title>
+  <desc id="description">A terminal prompt and capital T set inside a simplified black typewriter silhouette with an amber shadow.</desc>
+  <defs>
+    <path id="body" d="M112 92H400Q416 92 416 108V292H426L454 384Q464 416 430 416H82Q48 416 58 384L86 292H96V108Q96 92 112 92Z"/>
+    <rect id="carriage" x="72" y="68" width="368" height="28" rx="14"/>
+  </defs>
+  <g fill="#f4a340" transform="translate(22 22)">
+    <use href="#body"/>
+    <use href="#carriage"/>
+  </g>
+  <g fill="#171916">
+    <use href="#body"/>
+    <use href="#carriage"/>
+  </g>
+  <path d="M142 162 210 230 142 298 166 322 258 230 166 138Z" fill="#eee9dc"/>
+  <path d="M280 152H388V180H348V310H320V180H280Z" fill="#eee9dc"/>
+  <path d="M112 362H400" fill="none" stroke="#eee9dc" stroke-width="18" stroke-linecap="round"/>
+</svg>

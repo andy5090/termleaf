@@ -53,7 +53,21 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /favicon\.ico/);
   assert.match(html, /favicon\.png/);
   assert.match(html, /apple-touch-icon\.png/);
+  assert.equal(
+    html.match(/src="\/brand\/termleaf-mark-typewriter-t\.svg"/g)?.length,
+    2,
+  );
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
+});
+
+test("publishes sitemap and crawler discovery files", async () => {
+  const [sitemap, robots] = await Promise.all([
+    readFile(new URL("public/sitemap.xml", templateRoot), "utf8"),
+    readFile(new URL("public/robots.txt", templateRoot), "utf8"),
+  ]);
+
+  assert.match(sitemap, /<loc>https:\/\/termleaf\.com\/<\/loc>/);
+  assert.match(robots, /Sitemap: https:\/\/termleaf\.com\/sitemap\.xml/);
 });
 
 test("serves Korean for a Korean browser", async () => {
@@ -93,6 +107,9 @@ test("removes the disposable starter surface", async () => {
     access(new URL("public/favicon.ico", templateRoot)),
     access(new URL("public/favicon.png", templateRoot)),
     access(new URL("public/apple-touch-icon.png", templateRoot)),
+    access(new URL("public/brand/termleaf-mark-typewriter-t.svg", templateRoot)),
+    access(new URL("public/sitemap.xml", templateRoot)),
+    access(new URL("public/robots.txt", templateRoot)),
     access(new URL("public/termleaf-terminal.png", templateRoot)),
   ]);
   await assert.rejects(access(new URL("../app/_sites-preview", templateRoot)));

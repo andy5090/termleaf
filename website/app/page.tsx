@@ -185,6 +185,19 @@ function LineBreakTitle({ lines }: { lines: readonly [string, string] }) {
   );
 }
 
+function BrandMark() {
+  return (
+    <img
+      className="brand-mark"
+      src="/brand/termleaf-mark-typewriter-t.svg"
+      alt=""
+      width="34"
+      height="34"
+      aria-hidden="true"
+    />
+  );
+}
+
 export default async function Home() {
   const locale: Locale = detectLocale(await headers());
   const copy = content[locale];
@@ -193,7 +206,7 @@ export default async function Home() {
     <main>
       <header className="site-header">
         <a className="brand" href="#top" aria-label={copy.brandHome}>
-          <span className="brand-mark" aria-hidden="true">T</span>
+          <BrandMark />
           <span>termleaf</span>
         </a>
         <div className="header-actions">
@@ -335,7 +348,7 @@ export default async function Home() {
 
       <footer>
         <div className="footer-brand">
-          <span className="brand-mark" aria-hidden="true">T</span>
+          <BrandMark />
           <div>
             <strong>termleaf</strong>
             <span>{copy.footerTagline}</span>

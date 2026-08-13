@@ -43,6 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       icon: [
         { url: "/favicon.ico", sizes: "32x32" },
+        { url: "/brand/termleaf-mark-typewriter-t.svg", type: "image/svg+xml" },
         { url: "/favicon.png", type: "image/png", sizes: "512x512" },
       ],
       shortcut: "/favicon.ico",
