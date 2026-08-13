@@ -7,6 +7,20 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-08-13
+
+### Added
+
+- Published `sitemap.xml` and `robots.txt` so search engines can discover the
+  canonical Termleaf website.
+
+### Changed
+
+- Reworked the persistent shortcut guide into compact modifier groups with
+  Zellij-inspired key styling while keeping function keys such as `F1` intact.
+- Replaced the website's plain `T` mark with the Typewriter Body `>T` mark in
+  the header, footer, and favicon assets.
+
 ## [0.3.6] - 2026-08-10
 
 ### Added
@@ -141,7 +155,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/andy5090/termleaf/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/andy5090/termleaf/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/andy5090/termleaf/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/andy5090/termleaf/compare/v0.3.3...v0.3.4

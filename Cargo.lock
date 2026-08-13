@@ -727,7 +727,7 @@ dependencies = [
 
 [[package]]
 name = "termleaf"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "crossterm",
  "rodio",
