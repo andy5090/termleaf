@@ -918,6 +918,20 @@ fn draw_shortcuts(
     row: u16,
 ) -> io::Result<()> {
     let korean = cfg.language == "ko";
+    let bar: String = " ".repeat(cols as usize);
+    queue!(
+        out,
+        cursor::MoveTo(0, row),
+        SetForegroundColor(theme.bg),
+        SetBackgroundColor(theme.fg),
+        Print(&bar),
+        cursor::MoveTo(0, row),
+    )?;
+
+    if prompt.is_none() {
+        return draw_shortcut_guide(out, shortcut_guide(korean, cols), theme, cols);
+    }
+
     let text = if let Some(error) = prompt.and_then(|prompt| prompt.error.as_ref()) {
         let message = localized_prompt_error(error, korean);
         if korean {
@@ -934,43 +948,237 @@ fn draw_shortcuts(
     } else if prompt.is_some() {
         " Enter Save  Esc Cancel  │ No extension → .md  F9 Korean ".to_string()
     } else {
-        shortcut_guide(korean, cols).to_string()
+        unreachable!("the persistent guide is rendered before prompt-specific hints")
     };
-    let bar: String = " ".repeat(cols as usize);
     queue!(
         out,
-        cursor::MoveTo(0, row),
         SetForegroundColor(theme.bg),
         SetBackgroundColor(theme.fg),
-        Print(&bar),
-        cursor::MoveTo(0, row),
         Print(clipped(&text, cols))
     )
 }
 
-fn shortcut_guide(korean: bool, cols: u16) -> &'static str {
+#[derive(Debug, Clone, Copy)]
+struct ShortcutGroup {
+    modifier: Option<&'static str>,
+    bindings: &'static [(&'static str, &'static str)],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ShortcutGuide {
+    groups: &'static [ShortcutGroup],
+}
+
+const fn shortcut_group(
+    modifier: Option<&'static str>,
+    bindings: &'static [(&'static str, &'static str)],
+) -> ShortcutGroup {
+    ShortcutGroup { modifier, bindings }
+}
+
+impl ShortcutGuide {
+    fn width(self) -> u16 {
+        self.groups
+            .iter()
+            .enumerate()
+            .map(|(index, group)| {
+                let separator = u16::from(index > 0) * text_width(" │ ");
+                let modifier = group
+                    .modifier
+                    .map_or(0, |modifier| text_width(modifier) + 2);
+                let bindings: u16 = group
+                    .bindings
+                    .iter()
+                    .map(|(key, action)| 2 + text_width(key) + text_width(action))
+                    .sum();
+                separator + modifier + bindings
+            })
+            .sum()
+    }
+
+    #[cfg(test)]
+    fn plain_text(self) -> String {
+        self.groups
+            .iter()
+            .map(|group| {
+                let bindings = group
+                    .bindings
+                    .iter()
+                    .map(|(key, action)| format!("{key} {action}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                group.modifier.map_or(bindings.clone(), |modifier| {
+                    format!("{modifier} {bindings}")
+                })
+            })
+            .collect::<Vec<_>>()
+            .join(" │ ")
+    }
+}
+
+const CTRL_EN: &[(&str, &str)] = &[("O", "Open"), ("S", "Save"), ("Q", "Quit")];
+const CTRL_KO: &[(&str, &str)] = &[("O", "열기"), ("S", "저장"), ("Q", "종료")];
+const CTRL_QUIT_EN: &[(&str, &str)] = &[("Q", "Quit")];
+const CTRL_QUIT_KO: &[(&str, &str)] = &[("Q", "종료")];
+
+const F_WIDE_EN: &[(&str, &str)] = &[
+    ("F1", "Help"),
+    ("F2", "Input"),
+    ("F3", "Focus"),
+    ("F4", "Big"),
+    ("F5", "Page"),
+    ("F6", "Theme"),
+    ("F7/8", "Size"),
+    ("F9", "한국어"),
+    ("F10", "Sound"),
+    ("F12", "Save-as"),
+];
+const F_WIDE_KO: &[(&str, &str)] = &[
+    ("F1", "도움"),
+    ("F2", "입력"),
+    ("F3", "집중"),
+    ("F4", "큰글자"),
+    ("F5", "종이폭"),
+    ("F6", "테마"),
+    ("F7/8", "크기"),
+    ("F9", "영어"),
+    ("F10", "소리"),
+    ("F12", "다른이름"),
+];
+const F_STANDARD_EN: &[(&str, &str)] = &[
+    ("F1", "Help"),
+    ("F3", "Focus"),
+    ("F5", "Page"),
+    ("F6", "Theme"),
+    ("F7/8", "Size"),
+    ("F9", "한국어"),
+    ("F10", "Sound"),
+];
+const F_STANDARD_KO: &[(&str, &str)] = &[
+    ("F1", "도움"),
+    ("F3", "집중"),
+    ("F5", "종이폭"),
+    ("F6", "테마"),
+    ("F7/8", "크기"),
+    ("F9", "영어"),
+    ("F10", "소리"),
+];
+const F_COMPACT_EN: &[(&str, &str)] = &[("F1", "Help"), ("F5", "Page"), ("F10", "Sound")];
+const F_COMPACT_KO: &[(&str, &str)] = &[("F1", "도움"), ("F5", "종이"), ("F10", "소리")];
+const F_NARROW_EN: &[(&str, &str)] = &[("F5", "Page"), ("F10", "Sound")];
+const F_NARROW_KO: &[(&str, &str)] = &[("F5", "종이"), ("F10", "소리")];
+const F_TINY_EN: &[(&str, &str)] = F_NARROW_EN;
+const F_TINY_KO: &[(&str, &str)] = F_NARROW_KO;
+const SPACING_EN: &[(&str, &str)] = &[("F5", "Spacing")];
+const SPACING_KO: &[(&str, &str)] = &[("F5", "줄간격")];
+
+const WIDE_EN: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_EN),
+    shortcut_group(None, F_WIDE_EN),
+    shortcut_group(Some("Shift"), SPACING_EN),
+];
+const WIDE_KO: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_KO),
+    shortcut_group(None, F_WIDE_KO),
+    shortcut_group(Some("Shift"), SPACING_KO),
+];
+const STANDARD_EN: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_EN),
+    shortcut_group(None, F_STANDARD_EN),
+    shortcut_group(Some("Shift"), SPACING_EN),
+];
+const STANDARD_KO: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_KO),
+    shortcut_group(None, F_STANDARD_KO),
+    shortcut_group(Some("Shift"), SPACING_KO),
+];
+const COMPACT_EN: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_QUIT_EN),
+    shortcut_group(None, F_COMPACT_EN),
+    shortcut_group(Some("Shift"), SPACING_EN),
+];
+const COMPACT_KO: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_QUIT_KO),
+    shortcut_group(None, F_COMPACT_KO),
+    shortcut_group(Some("Shift"), SPACING_KO),
+];
+const NARROW_EN: &[ShortcutGroup] = &[
+    shortcut_group(None, F_NARROW_EN),
+    shortcut_group(Some("Shift"), SPACING_EN),
+];
+const NARROW_KO: &[ShortcutGroup] = &[
+    shortcut_group(None, F_NARROW_KO),
+    shortcut_group(Some("Shift"), SPACING_KO),
+];
+const TINY_EN: &[ShortcutGroup] = &[shortcut_group(None, F_TINY_EN)];
+const TINY_KO: &[ShortcutGroup] = &[shortcut_group(None, F_TINY_KO)];
+
+fn shortcut_guide(korean: bool, cols: u16) -> ShortcutGuide {
     let choices = if korean {
-        [
-            " F1 도움 F5 종이폭 ⇧F5 줄간격 F10 소리설정 ^O 열기 ^S 저장 F12 다른이름 ^Q 종료 │ F2 한글 F3 집중 F4 큰글자 F6 테마 F7/8 크기 F9 영어 ",
-            " F1 도움 F5 종이폭 ⇧F5 줄간격 F10 소리설정 ^O 열기 ^S 저장 ^Q 종료 │ F3 집중 F6 테마 F7/8 크기 ",
-            " F1 도움 F5 종이 ⇧F5 간격 F10 소리 ^Q 종료 ",
-            " F5 종이 ⇧F5 간격 F10 소리 ",
-            " F5 종이 F10 소리 ",
-        ]
+        [WIDE_KO, STANDARD_KO, COMPACT_KO, NARROW_KO, TINY_KO]
     } else {
-        [
-            " F1 Help F5 Page ⇧F5 Line spacing F10 Sound setup ^O Open ^S Save F12 Save-as ^Q Quit │ F2 Korean F3 Focus F4 Big F6 Theme F7/8 Size F9 한국어 ",
-            " F1 Help F5 Page ⇧F5 Spacing F10 Sound ^O Open ^S Save ^Q Quit │ F3 Focus F6 Theme F7/8 Size ",
-            " F1 Help F5 Page ⇧F5 Space F10 Sound ^Q Quit ",
-            " F5 Page ⇧F5 Space F10 Sound ",
-            " F5 Page F10 Sound ",
-        ]
+        [WIDE_EN, STANDARD_EN, COMPACT_EN, NARROW_EN, TINY_EN]
     };
 
     choices
         .into_iter()
-        .find(|text| text_width(text) <= cols)
-        .unwrap_or(choices[4])
+        .map(|groups| ShortcutGuide { groups })
+        .find(|guide| guide.width() <= cols)
+        .unwrap_or(ShortcutGuide { groups: choices[4] })
+}
+
+fn draw_shortcut_guide(
+    out: &mut Stdout,
+    guide: ShortcutGuide,
+    theme: &Theme,
+    cols: u16,
+) -> io::Result<()> {
+    let mut remaining = cols;
+    for (index, group) in guide.groups.iter().enumerate() {
+        if index > 0 {
+            draw_shortcut_segment(out, &mut remaining, " │ ", theme.dim, theme.fg)?;
+        }
+        if let Some(modifier) = group.modifier {
+            draw_shortcut_segment(
+                out,
+                &mut remaining,
+                &format!(" {modifier} "),
+                theme.bg,
+                theme.accent,
+            )?;
+        }
+        for (key, action) in group.bindings {
+            draw_shortcut_segment(out, &mut remaining, &format!(" {key}"), theme.bg, theme.dim)?;
+            draw_shortcut_segment(
+                out,
+                &mut remaining,
+                &format!(" {action}"),
+                theme.bg,
+                theme.fg,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn draw_shortcut_segment(
+    out: &mut Stdout,
+    remaining: &mut u16,
+    text: &str,
+    foreground: Color,
+    background: Color,
+) -> io::Result<()> {
+    if *remaining == 0 {
+        return Ok(());
+    }
+    let visible = clipped(text, *remaining);
+    *remaining = remaining.saturating_sub(text_width(&visible));
+    queue!(
+        out,
+        SetForegroundColor(foreground),
+        SetBackgroundColor(background),
+        Print(visible)
+    )
 }
 
 fn text_width(text: &str) -> u16 {
@@ -1058,22 +1266,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shortcut_guide_groups_shared_modifiers_like_a_modal_status_bar() {
+        for korean in [false, true] {
+            let guide = shortcut_guide(korean, 180);
+            let labels: Vec<Option<&str>> =
+                guide.groups.iter().map(|group| group.modifier).collect();
+            assert_eq!(labels, [Some("Ctrl"), None, Some("Shift")]);
+
+            let text = guide.plain_text();
+            assert_eq!(text.matches("Ctrl").count(), 1);
+            assert!(text.contains(if korean {
+                "Ctrl O 열기 S 저장 Q 종료"
+            } else {
+                "Ctrl O Open S Save Q Quit"
+            }));
+        }
+    }
+
+    #[test]
     fn shortcut_guide_adapts_without_hiding_primary_reading_and_sound_settings() {
         for korean in [false, true] {
             for width in [24, 40, 80, 180] {
                 let guide = shortcut_guide(korean, width);
-                assert!(text_width(guide) <= width);
-                assert!(guide.contains("F5"));
-                assert!(guide.contains("F10"));
+                let text = guide.plain_text();
+                assert!(guide.width() <= width);
+                assert!(text.contains("F5"));
+                assert!(text.contains("F10"));
+                if width >= 80 {
+                    assert!(text.contains("F1"));
+                }
                 if width >= 40 {
-                    assert!(guide.contains("F1"));
-                    assert!(guide.contains("⇧F5"));
+                    assert!(text.contains("Shift F5"));
                 }
             }
         }
 
-        assert!(!shortcut_guide(false, 40).contains("Alt+L"));
-        assert!(!shortcut_guide(true, 40).contains("Alt+L"));
+        assert!(!shortcut_guide(false, 40).plain_text().contains("Alt+L"));
+        assert!(!shortcut_guide(true, 40).plain_text().contains("Alt+L"));
     }
 
     #[test]
