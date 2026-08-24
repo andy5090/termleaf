@@ -7,6 +7,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-25
+
 ### Added
 
 - Added installable Korean and Japanese language packs with localized in-app
@@ -169,7 +171,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/andy5090/termleaf/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/andy5090/termleaf/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/andy5090/termleaf/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/andy5090/termleaf/compare/v0.3.4...v0.3.5
