@@ -140,6 +140,8 @@ plugin.
 | typing | insert text from the operating-system input method |
 | `F1` | open the help and startup-guide settings |
 | `F2` | toggle Termleaf's optional `Live Korean` composer |
+| `Shift+F2` | toggle `Live Japanese` romaji-to-kana input |
+| `Ctrl+K` | switch Hiragana/Katakana while Live Japanese is active |
 | `F3` | toggle focus mode |
 | `F4` | toggle the big-font zone |
 | `F5` | toggle the centered page-width (paper) mode |
@@ -197,20 +199,24 @@ system regardless of the selected interface language.
 
 ## Typing Korean and Japanese
 
-By default the status bar shows `IME:OS`; use the normal Linux/desktop 한/영
-shortcut and Termleaf accepts the committed Korean text from that IME. No Termleaf
-shortcut is required.
+By default the status bar shows `IME:OS`; Termleaf accepts text committed by
+the operating-system input method. Switch input sources with `Control+Space`
+on macOS (or a configured Globe/Fn key), `Win+Space` on Windows, or the desktop
+shortcut on Linux (`Super+Space` by default in GNOME). The input source must be
+installed in the operating system first.
 
-`F2` toggles the optional `Live Korean` (`IME:LIVE`) practice mode; it is not
+`F2` toggles the optional `Live Korean` (`IME:KO`) practice mode; it is not
 the operating system's 한/영 switch. In this mode Termleaf maps raw English-layout keys using standard
 **두벌식**, e.g. `g k s` → **한**. The big zone updates one character slot in
 place as `ㅎ` → `하` → `한`, and `Backspace` disassembles that same cluster one
-step at a time. Set the OS keyboard to English while using `IME:LIVE`, since
+step at a time. Set the OS keyboard to English while using `IME:KO`, since
 Termleaf needs the raw Latin key events to expose each intermediate step.
 
-Japanese uses the normal macOS or Linux IME. The Japanese pack provides the
-Japanese interface and enlarged hiragana, katakana, fullwidth, and available
-CJK glyphs; kana/kanji conversion remains securely handled by the OS.
+`Shift+F2` toggles `Live Japanese`, which converts common romaji sequences to
+Hiragana inside Termleaf (`konnichiha` → `こんにちは`). Press `Ctrl+K` to switch
+between Hiragana (`IME:JAあ`) and Katakana (`IME:JAア`). This lightweight mode
+does not offer kanji candidates; use the normal macOS, Windows, or Linux IME
+when kana-to-kanji conversion is needed.
 
 You can also open a document directly from the shell:
 
@@ -228,6 +234,8 @@ on exit and editable by hand:
 
 ```
 live_composition = false
+live_japanese = false
+japanese_katakana = false
 focus_mode = false
 sound = true
 backspace_sound = true

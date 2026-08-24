@@ -50,6 +50,9 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /termleaf — termleaf-demo\.md/);
   assert.doesNotMatch(html, /LIVE CAPTURE|Actual macOS Terminal|실제 macOS 터미널/i);
   assert.match(html, /aria-label="Language"/);
+  assert.match(html, /aria-haspopup="listbox"/);
+  assert.match(html, /role="option"/);
+  assert.doesNotMatch(html, /<select/i);
   assert.match(html, /favicon\.ico/);
   assert.match(html, /favicon\.png/);
   assert.match(html, /apple-touch-icon\.png/);

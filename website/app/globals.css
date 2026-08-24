@@ -117,22 +117,17 @@ nav a:hover {
   position: relative;
   display: flex;
   align-items: center;
+  z-index: 20;
 }
 
-.language-select::after {
-  content: "↓";
-  position: absolute;
-  right: 10px;
-  pointer-events: none;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-}
-
-.language-select select {
+.language-trigger {
   min-width: 86px;
   height: 36px;
-  padding: 0 28px 0 11px;
-  appearance: none;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   border: 1px solid var(--ink);
   border-radius: 0;
   background: rgba(255, 255, 255, 0.22);
@@ -143,9 +138,101 @@ nav a:hover {
   font-weight: 700;
 }
 
-.language-select select:focus-visible {
-  outline: 3px solid var(--amber);
-  outline-offset: 3px;
+.language-trigger:hover,
+.language-trigger[aria-expanded="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.language-chevron {
+  width: 10px;
+  height: 6px;
+  overflow: visible;
+  transition: transform 140ms ease;
+}
+
+.language-chevron path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: square;
+}
+
+.language-trigger[aria-expanded="true"] .language-chevron {
+  transform: rotate(180deg);
+}
+
+.language-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 176px;
+  padding: 6px;
+  border: 1px solid var(--ink);
+  background:
+    linear-gradient(rgba(23, 25, 22, 0.035) 1px, transparent 1px),
+    var(--paper);
+  background-size: 100% 4px, auto;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.language-menu[hidden] {
+  display: none;
+}
+
+.language-option {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 9px;
+  display: grid;
+  grid-template-columns: 28px 1fr 10px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.language-option + .language-option {
+  border-top: 1px solid var(--line);
+}
+
+.language-option:hover,
+.language-option:focus-visible,
+.language-option[data-active="true"] {
+  outline: 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.language-option-code,
+.language-option-mark {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.language-option-code {
+  color: var(--muted);
+}
+
+.language-option:hover .language-option-code,
+.language-option:focus-visible .language-option-code,
+.language-option[data-active="true"] .language-option-code {
+  color: var(--phosphor);
+}
+
+.language-option-name {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.language-option-mark {
+  color: var(--amber);
+  text-align: right;
 }
 
 .hero {
@@ -389,7 +476,7 @@ footer {
 
 .feature-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-top: 1px solid var(--ink);
   border-left: 1px solid var(--ink);
 }
@@ -482,6 +569,13 @@ footer {
   align-items: center;
   gap: 72px;
   border-top: 1px solid var(--line);
+}
+
+.manifesto > *,
+.feature-grid > *,
+.themes-section > *,
+.install-section > * {
+  min-width: 0;
 }
 
 .install-panel {
@@ -646,7 +740,7 @@ footer {
     gap: 12px;
   }
 
-  .language-select select {
+  .language-trigger {
     min-width: 72px;
   }
 
@@ -691,7 +785,18 @@ footer {
 
   .feature-grid,
   .theme-swatches {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :lang(ja) .manifesto h2,
+  :lang(ja) .section-heading h2,
+  :lang(ja) .feature-card h3,
+  :lang(ja) .feature-card p,
+  :lang(ja) .themes-copy h2,
+  :lang(ja) .install-copy h2,
+  :lang(ja) .install-copy p {
+    overflow-wrap: anywhere;
+    word-break: normal;
   }
 
   .feature-card {

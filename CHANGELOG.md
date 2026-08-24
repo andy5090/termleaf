@@ -7,6 +7,18 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Added `Shift+F2` Live Japanese romaji-to-kana input with a `Ctrl+K`
+  Hiragana/Katakana toggle while preserving the existing `F2` Live Korean mode.
+
+### Changed
+
+- Clarified the difference between display language and operating-system input
+  language in the in-app help and language manager.
+- Replaced the website's native language select with an accessible branded
+  dropdown supporting keyboard navigation and outside-click dismissal.
+
 ## [0.4.0] - 2026-08-25
 
 ### Added

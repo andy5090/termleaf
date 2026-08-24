@@ -11,6 +11,8 @@ pub enum Action {
     InsertChar(char),
     /// Feed a jamo keystroke into the Hangul composer.
     Jamo(char),
+    /// Feed a romaji keystroke into the Japanese kana composer.
+    Romaji(char),
     Backspace,
     Delete,
     Newline,
@@ -21,6 +23,8 @@ pub enum Action {
     Home,
     End,
     ToggleLiveComposition,
+    ToggleLiveJapanese,
+    ToggleJapaneseScript,
     ShowHelp,
     ToggleFocus,
     ToggleBigFont,
@@ -41,7 +45,7 @@ pub enum Action {
 
 /// Translate a key event into an [`Action`]. `live_composition` opts into
 /// Termleaf's raw two-set mapping; otherwise all text is left to the OS IME.
-pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
+pub fn map_key(key: KeyEvent, live_composition: bool, live_japanese: bool) -> Action {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
     match key.code {
@@ -50,6 +54,7 @@ pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
             'o' => Action::Open,
             's' if key.modifiers.contains(KeyModifiers::SHIFT) => Action::SaveAs,
             's' => Action::Save,
+            'k' if live_japanese => Action::ToggleJapaneseScript,
             _ => Action::Ignore,
         },
         KeyCode::Char(c)
@@ -63,6 +68,7 @@ pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
             Action::TogglePageWidth
         }
         KeyCode::F(1) => Action::ShowHelp,
+        KeyCode::F(2) if key.modifiers.contains(KeyModifiers::SHIFT) => Action::ToggleLiveJapanese,
         KeyCode::F(2) => Action::ToggleLiveComposition,
         KeyCode::F(3) => Action::ToggleFocus,
         KeyCode::F(4) => Action::ToggleBigFont,
@@ -86,7 +92,9 @@ pub fn map_key(key: KeyEvent, live_composition: bool) -> Action {
         KeyCode::End => Action::End,
         KeyCode::Tab => Action::InsertChar('\t'),
         KeyCode::Char(c) => {
-            if live_composition {
+            if live_japanese && (c.is_ascii_alphabetic() || matches!(c, '-' | '\'')) {
+                Action::Romaji(c)
+            } else if live_composition {
                 match key_to_jamo(c) {
                     Some(j) => Action::Jamo(j),
                     None => Action::InsertChar(c),
@@ -108,6 +116,7 @@ mod tests {
         assert_eq!(
             map_key(
                 KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL),
+                false,
                 false
             ),
             Action::Save
@@ -115,6 +124,7 @@ mod tests {
         assert_eq!(
             map_key(
                 KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL),
+                false,
                 false
             ),
             Action::Open
@@ -125,57 +135,111 @@ mod tests {
                     KeyCode::Char('S'),
                     KeyModifiers::CONTROL | KeyModifiers::SHIFT
                 ),
+                false,
                 false
             ),
             Action::SaveAs
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::ShowHelp
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::ToggleLiveComposition
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(2), KeyModifiers::SHIFT),
+                false,
+                false
+            ),
+            Action::ToggleLiveJapanese
+        );
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::ShowLanguageSettings
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::ShowSoundSettings
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::TogglePageWidth
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(5), KeyModifiers::SHIFT), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(5), KeyModifiers::SHIFT),
+                false,
+                false
+            ),
             Action::CycleLineSpacing
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(11), KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(11), KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::CycleSoundProfile
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::SaveAs
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT), false),
+            map_key(
+                KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT),
+                false,
+                false
+            ),
             Action::CycleLineSpacing
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT), false),
+            map_key(
+                KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT),
+                false,
+                false
+            ),
             Action::TogglePageWidth
         );
         assert_eq!(
-            map_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE), false),
+            map_key(
+                KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE),
+                false,
+                false
+            ),
             Action::Delete
         );
         assert_eq!(
             map_key(
                 KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL),
+                false,
                 false
             ),
             Action::Ignore
@@ -185,17 +249,31 @@ mod tests {
     #[test]
     fn maps_letters_to_jamo_only_in_live_composition_mode() {
         let key = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE);
-        assert_eq!(map_key(key, false), Action::InsertChar('g'));
-        assert_eq!(map_key(key, true), Action::Jamo('ㅎ'));
+        assert_eq!(map_key(key, false, false), Action::InsertChar('g'));
+        assert_eq!(map_key(key, true, false), Action::Jamo('ㅎ'));
 
         let punctuation = KeyEvent::new(KeyCode::Char('!'), KeyModifiers::SHIFT);
-        assert_eq!(map_key(punctuation, true), Action::InsertChar('!'));
+        assert_eq!(map_key(punctuation, true, false), Action::InsertChar('!'));
     }
 
     #[test]
     fn os_ime_committed_hangul_is_inserted_without_remapping() {
         let committed = KeyEvent::new(KeyCode::Char('한'), KeyModifiers::NONE);
-        assert_eq!(map_key(committed, false), Action::InsertChar('한'));
-        assert_eq!(map_key(committed, true), Action::InsertChar('한'));
+        assert_eq!(map_key(committed, false, false), Action::InsertChar('한'));
+        assert_eq!(map_key(committed, true, false), Action::InsertChar('한'));
+    }
+
+    #[test]
+    fn maps_romaji_and_script_toggle_only_in_live_japanese_mode() {
+        let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        assert_eq!(map_key(key, false, true), Action::Romaji('k'));
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL),
+                false,
+                true
+            ),
+            Action::ToggleJapaneseScript
+        );
     }
 }

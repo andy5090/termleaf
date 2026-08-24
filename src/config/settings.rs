@@ -17,6 +17,11 @@ pub struct Config {
     /// Whether Termleaf's optional live two-set composer handles ASCII keys.
     /// When false, input is left entirely to the operating-system IME.
     pub live_composition: bool,
+    /// Convert romaji to kana inside Termleaf. Mutually exclusive with the
+    /// live Korean composer during normal operation.
+    pub live_japanese: bool,
+    /// Render live Japanese conversion as katakana instead of hiragana.
+    pub japanese_katakana: bool,
     /// Focus mode hides the status bar and other chrome.
     pub focus_mode: bool,
     /// Enable typing sound effects and their optional delete/return sounds.
@@ -49,6 +54,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             live_composition: false,
+            live_japanese: false,
+            japanese_katakana: false,
             focus_mode: false,
             sound: true,
             backspace_sound: true,
@@ -104,6 +111,10 @@ impl Config {
                 "live_composition" => {
                     cfg.live_composition = parse_bool(value, cfg.live_composition)
                 }
+                "live_japanese" => cfg.live_japanese = parse_bool(value, cfg.live_japanese),
+                "japanese_katakana" => {
+                    cfg.japanese_katakana = parse_bool(value, cfg.japanese_katakana)
+                }
                 "focus_mode" => cfg.focus_mode = parse_bool(value, cfg.focus_mode),
                 "sound" => cfg.sound = parse_bool(value, cfg.sound),
                 "backspace_sound" => cfg.backspace_sound = parse_bool(value, cfg.backspace_sound),
@@ -146,6 +157,9 @@ impl Config {
                 _ => {}
             }
         }
+        if cfg.live_japanese {
+            cfg.live_composition = false;
+        }
         cfg
     }
 
@@ -165,6 +179,8 @@ impl Config {
         format!(
             "# Termleaf configuration\n\
              live_composition = {}\n\
+             live_japanese = {}\n\
+             japanese_katakana = {}\n\
              focus_mode = {}\n\
              sound = {}\n\
              backspace_sound = {}\n\
@@ -179,6 +195,8 @@ impl Config {
              show_welcome = {}\n\
              autosave_secs = {}\n",
             self.live_composition,
+            self.live_japanese,
+            self.japanese_katakana,
             self.focus_mode,
             self.sound,
             self.backspace_sound,
@@ -322,6 +340,8 @@ mod tests {
     fn persisted_text_restores_the_last_interface_and_sound_settings() {
         let cfg = Config {
             live_composition: true,
+            live_japanese: false,
+            japanese_katakana: true,
             focus_mode: true,
             sound: true,
             backspace_sound: false,
@@ -339,6 +359,8 @@ mod tests {
 
         let restored = Config::from_text(&cfg.to_text());
         assert!(restored.live_composition);
+        assert!(!restored.live_japanese);
+        assert!(restored.japanese_katakana);
         assert!(restored.focus_mode);
         assert!(!restored.backspace_sound);
         assert!(!restored.return_sound);
@@ -357,5 +379,12 @@ mod tests {
     fn legacy_hangul_toggle_does_not_override_the_new_os_ime_default() {
         let restored = Config::from_text("hangul_mode = true\n");
         assert!(!restored.live_composition);
+    }
+
+    #[test]
+    fn live_japanese_wins_over_conflicting_live_korean_config() {
+        let restored = Config::from_text("live_composition = true\nlive_japanese = true\n");
+        assert!(!restored.live_composition);
+        assert!(restored.live_japanese);
     }
 }

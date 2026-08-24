@@ -222,9 +222,9 @@ fn draw_language_settings(
     }
     let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
     let title = match locale {
-        Language::English => "Languages",
-        Language::Korean => "언어",
-        Language::Japanese => "言語",
+        Language::English => "Display language",
+        Language::Korean => "표시 언어",
+        Language::Japanese => "表示言語",
     };
     let controls = match locale {
         Language::English => "↑/↓ Select · Enter Install/Use · Delete Remove · Esc Close",
@@ -304,6 +304,15 @@ fn draw_language_settings(
     if let Some(status) = settings.status.as_deref() {
         draw_help_line(out, left, top + 6, width, status, theme.dim, theme.bg)?;
     }
+    draw_help_line(
+        out,
+        left,
+        top + 7,
+        width,
+        input_switch_hint(locale),
+        theme.dim,
+        theme.bg,
+    )?;
     draw_help_line(
         out,
         left,
@@ -527,40 +536,45 @@ fn draw_help(
     };
     let lines = match locale {
         Language::Korean => vec![
-            "Termleaf는 두 가지 한글 입력 방식을 제공합니다.",
-            "IME:OS(기본) — Linux 한/영 키 사용, 완성된 음절만 표시",
+            "표시 언어: F9에서 언어팩 설치·선택 (입력 언어와 별개)",
+            input_switch_hint(locale),
+            "OS 입력 소스가 먼저 설치되어 있어야 합니다.",
             "F2 직접 한글 — OS 입력을 영문으로 두면 ㅎ → 하 → 한 표시",
+            "Shift+F2 직접 일본어 — 로마자→가나 · Ctrl+K 히라가나/가타카나",
             "",
             "파일: Ctrl+O 열기 · Ctrl+S 저장 · F12 다른 이름 (.md 기본)",
             "화면: F3 집중 · F4 큰글자 · F6 테마 · F7/F8 크기 1–5",
             "보기: F5 종이 폭 · Shift+F5 줄간격 1–3",
             "보조: macOS Option+P/L · Windows/Linux Alt+P/L",
             "소리: F10 설정(타이핑/삭제/엔터) · F11 타자음",
-            "기타: Backspace/Delete 삭제 · F9 언어 · F1 도움말 · Ctrl+Q 종료",
+            "기타: Backspace/Delete 삭제 · F9 표시 언어 · F1 도움말 · Ctrl+Q 종료",
         ],
         Language::Japanese => vec![
-            "日本語入力にはOSのIMEをそのまま使用します。",
-            "IME:OS（標準）— かな・漢字変換はmacOS/Linux側で確定",
-            "韓国語パック導入時のみF2でLive Koreanを利用可能",
+            "表示言語: F9でインストール・選択（入力言語とは別）",
+            input_switch_hint(locale),
+            "OS側に入力ソースを先に追加してください。",
+            "F2 Live Korean · Shift+F2 ローマ字→かな · Ctrl+K あ/ア",
             "",
             "ファイル: Ctrl+O 開く · Ctrl+S 保存 · F12 名前を付けて保存",
             "表示: F3 集中 · F4 拡大文字 · F6 テーマ · F7/F8 サイズ",
             "読みやすさ: F5 ページ幅 · Shift+F5 行間 1–3",
             "代替: macOS Option+P/L · Windows/Linux Alt+P/L",
             "サウンド: F10 設定 · F11 キー音スタイル",
-            "その他: F9 言語 · F1 ヘルプ · Ctrl+Q 終了",
+            "その他: F9 表示言語 · F1 ヘルプ · Ctrl+Q 終了",
         ],
         Language::English => vec![
-            "Termleaf supports two Korean input paths.",
-            "IME:OS (default) — use Linux input switching; final syllables only",
+            "Display: F9 installs/selects UI language; typing is separate",
+            input_switch_hint(locale),
+            "Add the input source in your operating system first.",
             "F2 Live Korean — keep OS input English to see ㅎ → 하 → 한",
+            "Shift+F2 Live Japanese — romaji→kana · Ctrl+K Hiragana/Katakana",
             "",
             "Files: Ctrl+O Open · Ctrl+S Save · F12 Save as (.md default)",
             "View: F3 Focus · F4 Big text · F6 Theme · F7/F8 Size 1–5",
             "Reading: F5 Page width · Shift+F5 Line spacing 1–3",
             "Alternates: macOS Option+P/L · Windows/Linux Alt+P/L",
             "Sound: F10 Settings (typing/delete/return) · F11 Key style",
-            "Other: Backspace/Delete · F9 Languages · F1 Help · Ctrl+Q Quit",
+            "Other: Backspace/Delete · F9 Display language · F1 Help · Ctrl+Q Quit",
         ],
     };
 
@@ -617,9 +631,9 @@ fn draw_help(
         Language::English => format!("[{checked}] Don't show this welcome on startup"),
     };
     let controls = match locale {
-        Language::Korean => "Space 선택 · Enter/Esc 닫기 · F9 언어",
-        Language::Japanese => "Space 切替 · Enter/Esc 閉じる · F9 言語",
-        Language::English => "Space Toggle · Enter/Esc Close · F9 Languages",
+        Language::Korean => "Space 선택 · Enter/Esc 닫기 · F9 표시 언어",
+        Language::Japanese => "Space 切替 · Enter/Esc 閉じる · F9 表示言語",
+        Language::English => "Space Toggle · Enter/Esc Close · F9 Display language",
     };
     draw_help_line(
         out,
@@ -639,6 +653,34 @@ fn draw_help(
         theme.dim,
         theme.bg,
     )
+}
+
+fn input_switch_hint(locale: Language) -> &'static str {
+    #[cfg(target_os = "macos")]
+    let hint = match locale {
+        Language::Korean => "입력(macOS): Control+Space · 설정한 Globe/Fn",
+        Language::Japanese => "入力(macOS): Control+Space · 設定したGlobe/Fn",
+        Language::English => "Typing (macOS): Control+Space · configured Globe/Fn",
+    };
+    #[cfg(target_os = "windows")]
+    let hint = match locale {
+        Language::Korean => "입력(Windows): Win+Space",
+        Language::Japanese => "入力(Windows): Win+Space",
+        Language::English => "Typing (Windows): Win+Space",
+    };
+    #[cfg(target_os = "linux")]
+    let hint = match locale {
+        Language::Korean => "입력(Linux): GNOME Super+Space · 데스크톱 설정 키",
+        Language::Japanese => "入力(Linux): GNOME Super+Space · デスクトップ設定キー",
+        Language::English => "Typing (Linux): GNOME Super+Space · desktop setting",
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    let hint = match locale {
+        Language::Korean => "입력 언어는 운영체제의 입력 전환 키를 사용합니다",
+        Language::Japanese => "入力言語はOSの入力切替キーを使用します",
+        Language::English => "Typing language uses your operating-system shortcut",
+    };
+    hint
 }
 
 fn draw_help_line(
@@ -984,7 +1026,11 @@ fn draw_status(
 ) -> io::Result<()> {
     let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
     let mode = if cfg.live_composition {
-        "IME:LIVE"
+        "IME:KO"
+    } else if cfg.live_japanese && cfg.japanese_katakana {
+        "IME:JAア"
+    } else if cfg.live_japanese {
+        "IME:JAあ"
     } else {
         "IME:OS"
     };
@@ -1199,37 +1245,37 @@ const CTRL_QUIT_JA: &[(&str, &str)] = &[("Q", "終了")];
 
 const F_WIDE_EN: &[(&str, &str)] = &[
     ("F1", "Help"),
-    ("F2", "Input"),
+    ("F2", "Korean"),
     ("F3", "Focus"),
     ("F4", "Big"),
     ("F5", "Page"),
     ("F6", "Theme"),
     ("F7/8", "Size"),
-    ("F9", "Languages"),
+    ("F9", "Display"),
     ("F10", "Sound"),
     ("F12", "Save-as"),
 ];
 const F_WIDE_KO: &[(&str, &str)] = &[
     ("F1", "도움"),
-    ("F2", "입력"),
+    ("F2", "한글"),
     ("F3", "집중"),
     ("F4", "큰글자"),
     ("F5", "종이폭"),
     ("F6", "테마"),
     ("F7/8", "크기"),
-    ("F9", "언어"),
+    ("F9", "표시언어"),
     ("F10", "소리"),
     ("F12", "다른이름"),
 ];
 const F_WIDE_JA: &[(&str, &str)] = &[
     ("F1", "ヘルプ"),
-    ("F2", "入力"),
+    ("F2", "韓国語"),
     ("F3", "集中"),
     ("F4", "拡大"),
     ("F5", "ページ"),
     ("F6", "テーマ"),
     ("F7/8", "サイズ"),
-    ("F9", "言語"),
+    ("F9", "表示言語"),
     ("F10", "サウンド"),
     ("F12", "別名保存"),
 ];
@@ -1239,7 +1285,7 @@ const F_STANDARD_EN: &[(&str, &str)] = &[
     ("F5", "Page"),
     ("F6", "Theme"),
     ("F7/8", "Size"),
-    ("F9", "Languages"),
+    ("F9", "Display"),
     ("F10", "Sound"),
 ];
 const F_STANDARD_KO: &[(&str, &str)] = &[
@@ -1248,7 +1294,7 @@ const F_STANDARD_KO: &[(&str, &str)] = &[
     ("F5", "종이폭"),
     ("F6", "테마"),
     ("F7/8", "크기"),
-    ("F9", "언어"),
+    ("F9", "표시언어"),
     ("F10", "소리"),
 ];
 const F_STANDARD_JA: &[(&str, &str)] = &[
@@ -1257,7 +1303,7 @@ const F_STANDARD_JA: &[(&str, &str)] = &[
     ("F5", "ページ"),
     ("F6", "テーマ"),
     ("F7/8", "サイズ"),
-    ("F9", "言語"),
+    ("F9", "表示言語"),
     ("F10", "音"),
 ];
 const F_COMPACT_EN: &[(&str, &str)] = &[("F1", "Help"), ("F5", "Page"), ("F10", "Sound")];
@@ -1269,6 +1315,9 @@ const F_NARROW_JA: &[(&str, &str)] = &[("F5", "幅"), ("F10", "音")];
 const F_TINY_EN: &[(&str, &str)] = F_NARROW_EN;
 const F_TINY_KO: &[(&str, &str)] = F_NARROW_KO;
 const F_TINY_JA: &[(&str, &str)] = F_NARROW_JA;
+const INPUT_SPACING_EN: &[(&str, &str)] = &[("F2", "Japanese"), ("F5", "Spacing")];
+const INPUT_SPACING_KO: &[(&str, &str)] = &[("F2", "일본어"), ("F5", "줄간격")];
+const INPUT_SPACING_JA: &[(&str, &str)] = &[("F2", "日本語"), ("F5", "行間")];
 const SPACING_EN: &[(&str, &str)] = &[("F5", "Spacing")];
 const SPACING_KO: &[(&str, &str)] = &[("F5", "줄간격")];
 const SPACING_JA: &[(&str, &str)] = &[("F5", "行間")];
@@ -1276,32 +1325,32 @@ const SPACING_JA: &[(&str, &str)] = &[("F5", "行間")];
 const WIDE_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_EN),
     shortcut_group(None, F_WIDE_EN),
-    shortcut_group(Some("Shift"), SPACING_EN),
+    shortcut_group(Some("Shift"), INPUT_SPACING_EN),
 ];
 const WIDE_KO: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_KO),
     shortcut_group(None, F_WIDE_KO),
-    shortcut_group(Some("Shift"), SPACING_KO),
+    shortcut_group(Some("Shift"), INPUT_SPACING_KO),
 ];
 const WIDE_JA: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_JA),
     shortcut_group(None, F_WIDE_JA),
-    shortcut_group(Some("Shift"), SPACING_JA),
+    shortcut_group(Some("Shift"), INPUT_SPACING_JA),
 ];
 const STANDARD_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_EN),
     shortcut_group(None, F_STANDARD_EN),
-    shortcut_group(Some("Shift"), SPACING_EN),
+    shortcut_group(Some("Shift"), INPUT_SPACING_EN),
 ];
 const STANDARD_KO: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_KO),
     shortcut_group(None, F_STANDARD_KO),
-    shortcut_group(Some("Shift"), SPACING_KO),
+    shortcut_group(Some("Shift"), INPUT_SPACING_KO),
 ];
 const STANDARD_JA: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_JA),
     shortcut_group(None, F_STANDARD_JA),
-    shortcut_group(Some("Shift"), SPACING_JA),
+    shortcut_group(Some("Shift"), INPUT_SPACING_JA),
 ];
 const COMPACT_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_QUIT_EN),
@@ -1528,8 +1577,12 @@ mod tests {
                 if width >= 80 {
                     assert!(text.contains("F1"));
                 }
+                if width >= 180 {
+                    assert!(text.contains("Shift F2"));
+                }
                 if width >= 40 {
-                    assert!(text.contains("Shift F5"));
+                    assert!(text.contains("Shift"));
+                    assert!(text.contains("F5"));
                 }
             }
         }

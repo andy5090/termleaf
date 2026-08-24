@@ -7,7 +7,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::input::Composer;
+use crate::input::{JapaneseComposer, KoreanComposer};
 use buffer::Buffer;
 use state::{Cursor, DocState};
 
@@ -16,7 +16,8 @@ use state::{Cursor, DocState};
 pub struct Editor {
     pub buffer: Buffer,
     pub doc: DocState,
-    pub composer: Composer,
+    pub composer: KoreanComposer,
+    pub japanese_composer: JapaneseComposer,
 }
 
 impl Default for Editor {
@@ -24,7 +25,8 @@ impl Default for Editor {
         Self {
             buffer: Buffer::new(),
             doc: DocState::default(),
-            composer: Composer::new(),
+            composer: KoreanComposer::new(),
+            japanese_composer: JapaneseComposer::new(),
         }
     }
 }
@@ -49,7 +51,8 @@ impl Editor {
                 path: Some(path),
                 ..Default::default()
             },
-            composer: Composer::new(),
+            composer: KoreanComposer::new(),
+            japanese_composer: JapaneseComposer::new(),
         })
     }
 
@@ -63,10 +66,14 @@ impl Editor {
 
     /// The current (possibly partial) composing glyph, e.g. "하".
     pub fn composing(&self) -> String {
-        self.composer.composing_string()
+        if self.composer.is_empty() {
+            self.japanese_composer.composing_string()
+        } else {
+            self.composer.composing_string()
+        }
     }
 
-    pub fn composer(&self) -> &Composer {
+    pub fn composer(&self) -> &KoreanComposer {
         &self.composer
     }
 
@@ -120,17 +127,35 @@ impl Editor {
         self.doc.dirty = true;
     }
 
+    /// Feed a romaji key into the live Japanese composer. Completed kana are
+    /// committed immediately while an incomplete sequence remains visible.
+    pub fn input_romaji(&mut self, character: char, katakana: bool) {
+        let committed = self.japanese_composer.input(character, katakana);
+        for character in committed {
+            self.insert_committed(character);
+        }
+        self.doc.dirty = true;
+    }
+
     /// Finalize pending composition into the buffer.
     pub fn flush(&mut self) {
         let committed = self.composer.flush();
         for c in committed {
             self.insert_committed(c);
         }
+        let committed = self.japanese_composer.flush();
+        for character in committed {
+            self.insert_committed(character);
+        }
     }
 
     pub fn backspace(&mut self) -> bool {
         if !self.composer.is_empty() {
             self.composer.backspace();
+            self.doc.dirty = true;
+            return true;
+        }
+        if self.japanese_composer.backspace() {
             self.doc.dirty = true;
             return true;
         }
@@ -370,6 +395,19 @@ mod tests {
         assert_eq!(editor.focus_text(4), ['하']);
         editor.input_jamo('ㄴ');
         assert_eq!(editor.focus_text(4), ['한']);
+    }
+
+    #[test]
+    fn live_japanese_keeps_pending_romaji_visible_and_commits_kana() {
+        let mut editor = Editor::new();
+
+        editor.input_romaji('k', false);
+        assert_eq!(editor.composing(), "k");
+        assert_eq!(editor.focus_text(4), ['k']);
+
+        editor.input_romaji('a', false);
+        assert_eq!(editor.buffer.to_text(), "か");
+        assert!(editor.composing().is_empty());
     }
 
     #[test]

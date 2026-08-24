@@ -79,6 +79,12 @@ fn main() -> io::Result<()> {
             }
         }
     }
+    if cfg.live_japanese && !languages.is_installed(Language::Japanese) {
+        cfg.live_japanese = false;
+    }
+    if cfg.live_composition && !languages.is_installed(Language::Korean) {
+        cfg.live_composition = false;
+    }
 
     let mut editor = match &path {
         Some(path) => Editor::open(path)?,
@@ -166,7 +172,7 @@ fn main() -> io::Result<()> {
                         }
                         needs_redraw = true;
                     } else {
-                        let action = map_key(key, cfg.live_composition);
+                        let action = map_key(key, cfg.live_composition, cfg.live_japanese);
                         if matches!(action, Action::Quit) {
                             break;
                         }
@@ -389,6 +395,9 @@ fn run_language_command(command: LanguageCommand) -> Result<(), String> {
             if language == Language::Korean {
                 config.live_composition = false;
             }
+            if language == Language::Japanese {
+                config.live_japanese = false;
+            }
             if config.language == language.code() {
                 config.set_language("en");
                 config.save().map_err(|error| error.to_string())?;
@@ -462,6 +471,9 @@ fn handle_language_settings_key(
                     if language == Language::Korean {
                         cfg.live_composition = false;
                     }
+                    if language == Language::Japanese {
+                        cfg.live_japanese = false;
+                    }
                     if cfg.language == language.code() {
                         cfg.set_language("en");
                     }
@@ -494,6 +506,10 @@ fn apply(
             editor.input_jamo(j);
             key_clack(sound, cfg);
         }
+        Action::Romaji(character) => {
+            editor.input_romaji(character, cfg.japanese_katakana);
+            key_clack(sound, cfg);
+        }
         Action::Backspace => {
             if editor.backspace() && cfg.sound && cfg.backspace_sound {
                 sound.play_backspace();
@@ -521,10 +537,32 @@ fn apply(
             if languages.is_installed(Language::Korean) {
                 editor.flush();
                 cfg.live_composition = !cfg.live_composition;
+                if cfg.live_composition {
+                    cfg.live_japanese = false;
+                }
             } else {
                 let mut settings = LanguageSettings::new("ko");
                 settings.selected = 1;
                 ui.language_settings = Some(settings);
+            }
+        }
+        Action::ToggleLiveJapanese => {
+            if languages.is_installed(Language::Japanese) {
+                editor.flush();
+                cfg.live_japanese = !cfg.live_japanese;
+                if cfg.live_japanese {
+                    cfg.live_composition = false;
+                }
+            } else {
+                let mut settings = LanguageSettings::new("ja");
+                settings.selected = 2;
+                ui.language_settings = Some(settings);
+            }
+        }
+        Action::ToggleJapaneseScript => {
+            if cfg.live_japanese {
+                editor.flush();
+                cfg.japanese_katakana = !cfg.japanese_katakana;
             }
         }
         Action::ToggleFocus => cfg.focus_mode = !cfg.focus_mode,
