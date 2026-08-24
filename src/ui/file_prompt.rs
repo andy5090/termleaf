@@ -67,12 +67,14 @@ impl FilePrompt {
         }
     }
 
-    pub fn label(&self, korean: bool) -> &'static str {
-        match (self.kind, korean) {
-            (FilePromptKind::Open, false) => "Open file",
-            (FilePromptKind::SaveAs, false) => "Save file",
-            (FilePromptKind::Open, true) => "불러올 파일",
-            (FilePromptKind::SaveAs, true) => "저장할 파일",
+    pub fn label(&self, language: &str) -> &'static str {
+        match (self.kind, language) {
+            (FilePromptKind::Open, "ko") => "불러올 파일",
+            (FilePromptKind::SaveAs, "ko") => "저장할 파일",
+            (FilePromptKind::Open, "ja") => "開くファイル",
+            (FilePromptKind::SaveAs, "ja") => "保存するファイル",
+            (FilePromptKind::Open, _) => "Open file",
+            (FilePromptKind::SaveAs, _) => "Save file",
         }
     }
 
@@ -266,8 +268,9 @@ mod tests {
         let prompt = FilePrompt::save_as(None);
         assert_eq!(prompt.kind, FilePromptKind::SaveAs);
         assert!(prompt.input.is_empty());
-        assert_eq!(prompt.label(false), "Save file");
-        assert_eq!(prompt.label(true), "저장할 파일");
+        assert_eq!(prompt.label("en"), "Save file");
+        assert_eq!(prompt.label("ko"), "저장할 파일");
+        assert_eq!(prompt.label("ja"), "保存するファイル");
     }
 
     #[test]

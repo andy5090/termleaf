@@ -43,7 +43,7 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /Write\./);
   assert.match(html, /Nothing else\./);
   assert.match(html, /v0\.3\.7/);
-  assert.match(html, /termleaf-installer\.sh/);
+  assert.match(html, /https:\/\/termleaf\.com\/install/);
   assert.match(html, /Real-recorded typewriter sound/);
   assert.match(html, /One command gets you set up/);
   assert.match(html, /src="\/termleaf-terminal\.png"/);
@@ -68,6 +68,7 @@ test("publishes sitemap and crawler discovery files", async () => {
 
   assert.match(sitemap, /<loc>https:\/\/termleaf\.com\/<\/loc>/);
   assert.match(robots, /Sitemap: https:\/\/termleaf\.com\/sitemap\.xml/);
+  assert.match(robots, /Disallow: \/install/);
 });
 
 test("serves Korean for a Korean browser", async () => {
@@ -77,9 +78,34 @@ test("serves Korean for a Korean browser", async () => {
   assert.match(html, /<html lang="ko">/i);
   assert.match(html, /<title>Termleaf — 터미널에, 글만 남기다<\/title>/i);
   assert.match(html, /그 순간 화면에는 글만 남습니다\./);
-  assert.match(html, /한 줄이면 설치가 끝납니다\./);
+  assert.match(html, /한 줄이면 Termleaf와 한국어팩 설치가 끝납니다\./);
+  assert.match(html, /curl -fsSL https:\/\/termleaf\.com\/install\/ko \| sh/);
   assert.doesNotMatch(html, /Markdown 기본/);
   assert.match(html, /aria-label="언어"/);
+});
+
+test("serves Japanese with its one-command language pack installer", async () => {
+  const response = await render({ acceptLanguage: "ja-JP,ja;q=0.9,en;q=0.8" });
+  const html = await response.text();
+
+  assert.match(html, /<html lang="ja">/i);
+  assert.match(html, /<title>Termleaf — 書く。それだけ。<\/title>/i);
+  assert.match(html, /日本語に対応した拡大文字/);
+  assert.match(html, /curl -fsSL https:\/\/termleaf\.com\/install\/ja \| sh/);
+  assert.match(html, /aria-label="言語"/);
+});
+
+test("serves short localized installer entry points", async () => {
+  for (const locale of ["en", "ko", "ja"]) {
+    const path = locale === "en" ? "/install" : `/install/${locale}`;
+    const response = await render({ url: `https://termleaf.com${path}` });
+    const script = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /^text\/x-shellscript/);
+    assert.match(script, /termleaf-installer\.sh/);
+    assert.match(script, new RegExp(`--language ${locale}`));
+  }
 });
 
 test("stored language preference overrides the browser locale", async () => {

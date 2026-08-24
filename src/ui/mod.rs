@@ -2,12 +2,14 @@
 
 pub mod file_prompt;
 pub mod help;
+pub mod language_settings;
 pub mod layout;
 pub mod sound_settings;
 pub mod themes;
 
 pub use file_prompt::{FilePrompt, FilePromptError, FilePromptKind};
 pub use help::HelpOverlay;
+pub use language_settings::LanguageSettings;
 pub use layout::Layout;
 pub use sound_settings::SoundSettings;
 pub use themes::Theme;

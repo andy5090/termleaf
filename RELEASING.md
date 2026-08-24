@@ -39,9 +39,9 @@ git push origin v0.2.2
 ```
 
 The generated Release workflow builds macOS, x86_64 Linux, and i686 Linux
-archives, checksums, and the common shell installer, then publishes them to
-GitHub Releases. The i686 archive is supplied by the custom reusable workflow
-at `.github/workflows/build-i686.yml`.
+archives, checksums, the common shell installer, and Korean/Japanese language
+packs, then publishes them to GitHub Releases. The i686 archive is supplied by
+the custom reusable workflow at `.github/workflows/build-i686.yml`.
 
 After it finishes, verify:
 

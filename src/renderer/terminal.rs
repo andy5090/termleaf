@@ -9,9 +9,10 @@ use super::font::{glyph_for, Glyph};
 use crate::config::settings::{MAX_FONT, MAX_LINE_SPACING};
 use crate::config::Config;
 use crate::editor::Editor;
+use crate::language::{Language, LanguageRegistry};
 use crate::ui::{
-    char_width, FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, Layout, SoundSettings,
-    Theme,
+    char_width, FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, LanguageSettings, Layout,
+    SoundSettings, Theme,
 };
 
 const PAGE_CONTENT_WIDTH: u16 = 80;
@@ -38,36 +39,41 @@ impl Drop for TerminalGuard {
 }
 
 /// Paint one full frame.
-pub fn draw(
-    out: &mut Stdout,
-    editor: &Editor,
-    cfg: &Config,
-    theme: &Theme,
-    prompt: Option<&FilePrompt>,
-    help: Option<&HelpOverlay>,
-    sound_settings: Option<&SoundSettings>,
-) -> io::Result<()> {
+pub struct View<'a> {
+    pub editor: &'a Editor,
+    pub cfg: &'a Config,
+    pub theme: &'a Theme,
+    pub prompt: Option<&'a FilePrompt>,
+    pub help: Option<&'a HelpOverlay>,
+    pub sound_settings: Option<&'a SoundSettings>,
+    pub language_settings: Option<&'a LanguageSettings>,
+    pub languages: &'a LanguageRegistry,
+}
+
+pub fn draw(out: &mut Stdout, view: View<'_>) -> io::Result<()> {
     let (cols, rows) = terminal::size()?;
     // File prompts must remain visible even when focus mode normally hides
     // chrome, so temporarily reserve the two footer rows for them.
-    let layout = if prompt.is_some() && cfg.focus_mode {
-        let mut prompt_cfg = cfg.clone();
+    let layout = if view.prompt.is_some() && view.cfg.focus_mode {
+        let mut prompt_cfg = view.cfg.clone();
         prompt_cfg.focus_mode = false;
         Layout::compute(cols, rows, &prompt_cfg)
     } else {
-        Layout::compute(cols, rows, cfg)
+        Layout::compute(cols, rows, view.cfg)
     };
 
     // Terminals supporting synchronized updates keep the previous frame
     // visible until this complete frame is ready, preventing the background
     // clear and large-glyph painting from appearing as separate flashes.
     let frame = Frame {
-        editor,
-        cfg,
-        theme,
-        prompt,
-        help,
-        sound_settings,
+        editor: view.editor,
+        cfg: view.cfg,
+        theme: view.theme,
+        prompt: view.prompt,
+        help: view.help,
+        sound_settings: view.sound_settings,
+        language_settings: view.language_settings,
+        languages: view.languages,
         layout: &layout,
         rows,
     };
@@ -82,6 +88,8 @@ struct Frame<'a> {
     prompt: Option<&'a FilePrompt>,
     help: Option<&'a HelpOverlay>,
     sound_settings: Option<&'a SoundSettings>,
+    language_settings: Option<&'a LanguageSettings>,
+    languages: &'a LanguageRegistry,
     layout: &'a Layout,
     rows: u16,
 }
@@ -102,7 +110,14 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
     }
 
     if frame.layout.big_enabled {
-        draw_big(out, frame.editor, frame.cfg, frame.theme, frame.layout)?;
+        draw_big(
+            out,
+            frame.editor,
+            frame.cfg,
+            frame.theme,
+            frame.layout,
+            frame.languages,
+        )?;
     }
 
     let caret = draw_document(out, frame.editor, frame.cfg, frame.theme, frame.layout)?;
@@ -141,7 +156,7 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
         )?;
     }
 
-    if frame.help.is_none() && frame.sound_settings.is_none() {
+    if frame.help.is_none() && frame.sound_settings.is_none() && frame.language_settings.is_none() {
         if let (Some(prompt), Some(status_row)) = (frame.prompt, frame.layout.status_row) {
             draw_file_candidates(
                 out,
@@ -172,6 +187,16 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
             frame.layout.cols,
             frame.rows,
         )?;
+    } else if let Some(settings) = frame.language_settings {
+        draw_language_settings(
+            out,
+            frame.cfg,
+            settings,
+            frame.languages,
+            frame.theme,
+            frame.layout.cols,
+            frame.rows,
+        )?;
     } else if let Some((cx, cy)) = prompt_caret {
         queue!(out, cursor::MoveTo(cx, cy), cursor::Show)?;
     } else if let (Some(cx), Some(cy)) = caret {
@@ -179,6 +204,115 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn draw_language_settings(
+    out: &mut Stdout,
+    cfg: &Config,
+    settings: &LanguageSettings,
+    languages: &LanguageRegistry,
+    theme: &Theme,
+    cols: u16,
+    rows: u16,
+) -> io::Result<()> {
+    let width = cols.saturating_sub(2).min(62);
+    let height = 10;
+    if width < 34 || rows < height + 2 {
+        return Ok(());
+    }
+    let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
+    let title = match locale {
+        Language::English => "Languages",
+        Language::Korean => "언어",
+        Language::Japanese => "言語",
+    };
+    let controls = match locale {
+        Language::English => "↑/↓ Select · Enter Install/Use · Delete Remove · Esc Close",
+        Language::Korean => "↑/↓ 선택 · Enter 설치/사용 · Delete 제거 · Esc 닫기",
+        Language::Japanese => "↑/↓ 選択 · Enter インストール/使用 · Delete 削除 · Esc 閉じる",
+    };
+    let left = (cols - width) / 2;
+    let top = (rows - height) / 2;
+    let horizontal = "─".repeat(width.saturating_sub(2) as usize);
+    let inner_blank = " ".repeat(width.saturating_sub(2) as usize);
+    queue!(
+        out,
+        SetForegroundColor(theme.accent),
+        SetBackgroundColor(theme.bg),
+        cursor::MoveTo(left, top),
+        Print(format!("┌{horizontal}┐"))
+    )?;
+    for offset in 1..height - 1 {
+        queue!(
+            out,
+            cursor::MoveTo(left, top + offset),
+            Print("│"),
+            SetForegroundColor(theme.fg),
+            Print(&inner_blank),
+            SetForegroundColor(theme.accent),
+            Print("│")
+        )?;
+    }
+    queue!(
+        out,
+        cursor::MoveTo(left, top + height - 1),
+        Print(format!("└{horizontal}┘"))
+    )?;
+    draw_help_line(out, left, top + 1, width, title, theme.accent, theme.bg)?;
+
+    for (index, language) in Language::ALL.iter().copied().enumerate() {
+        let marker = if settings.selected == index {
+            "▶"
+        } else {
+            " "
+        };
+        let active = cfg.language == language.code();
+        let state = match (
+            locale,
+            language.is_builtin(),
+            languages.is_installed(language),
+            active,
+        ) {
+            (Language::Korean, _, _, true) => "사용 중",
+            (Language::Japanese, _, _, true) => "使用中",
+            (_, _, _, true) => "Active",
+            (Language::Korean, true, _, _) => "기본 제공",
+            (Language::Japanese, true, _, _) => "内蔵",
+            (_, true, _, _) => "Built in",
+            (Language::Korean, _, true, _) => "설치됨",
+            (Language::Japanese, _, true, _) => "インストール済み",
+            (_, _, true, _) => "Installed",
+            (Language::Korean, _, false, _) => "설치 가능",
+            (Language::Japanese, _, false, _) => "利用可能",
+            (_, _, false, _) => "Available",
+        };
+        let line = format!("{marker}  {:<12}  {state}", language.native_name());
+        draw_help_line(
+            out,
+            left,
+            top + 3 + index as u16,
+            width,
+            &line,
+            if settings.selected == index {
+                theme.accent
+            } else {
+                theme.fg
+            },
+            theme.bg,
+        )?;
+    }
+    if let Some(status) = settings.status.as_deref() {
+        draw_help_line(out, left, top + 6, width, status, theme.dim, theme.bg)?;
+    }
+    draw_help_line(
+        out,
+        left,
+        top + height - 2,
+        width,
+        controls,
+        theme.dim,
+        theme.bg,
+    )
 }
 
 fn draw_sound_settings(
@@ -195,44 +329,44 @@ fn draw_sound_settings(
         return Ok(());
     }
 
-    let korean = cfg.language == "ko";
-    let title = if korean {
-        "소리 설정"
-    } else {
-        "Sound Settings"
+    let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
+    let title = match locale {
+        Language::English => "Sound Settings",
+        Language::Korean => "소리 설정",
+        Language::Japanese => "サウンド設定",
     };
-    let enabled = |value| {
-        if value {
-            if korean {
-                "켬"
-            } else {
-                "on"
-            }
-        } else if korean {
-            "끔"
-        } else {
-            "off"
-        }
+    let enabled = |value| match (locale, value) {
+        (Language::Korean, true) => "켬",
+        (Language::Korean, false) => "끔",
+        (Language::Japanese, true) => "オン",
+        (Language::Japanese, false) => "オフ",
+        (_, true) => "on",
+        (_, false) => "off",
     };
-    let lines = if korean {
-        [
+    let lines = match locale {
+        Language::Korean => [
             format!("[{}] 타이핑 소리", enabled(cfg.sound)),
             format!("[{}] 삭제 소리", enabled(cfg.backspace_sound)),
             format!("[{}] 캐리지 리턴 소리", enabled(cfg.return_sound)),
             format!("[{}] 타자기 종류 (F11)", cfg.sound_profile),
-        ]
-    } else {
-        [
+        ],
+        Language::Japanese => [
+            format!("[{}] タイピング音", enabled(cfg.sound)),
+            format!("[{}] 削除音", enabled(cfg.backspace_sound)),
+            format!("[{}] キャリッジリターン音", enabled(cfg.return_sound)),
+            format!("[{}] キー音スタイル (F11)", cfg.sound_profile),
+        ],
+        Language::English => [
             format!("[{}] Typing sound", enabled(cfg.sound)),
             format!("[{}] Delete sound", enabled(cfg.backspace_sound)),
             format!("[{}] Carriage-return sound", enabled(cfg.return_sound)),
             format!("[{}] Key style (F11)", cfg.sound_profile),
-        ]
+        ],
     };
-    let controls = if korean {
-        "↑/↓ 선택 · Space 전환 · ←/→ 변경 · Enter/Esc 닫기"
-    } else {
-        "↑/↓ Select · Space Toggle · ←/→ Change · Enter/Esc Close"
+    let controls = match locale {
+        Language::Korean => "↑/↓ 선택 · Space 전환 · ←/→ 변경 · Enter/Esc 닫기",
+        Language::Japanese => "↑/↓ 選択 · Space 切替 · ←/→ 変更 · Enter/Esc 閉じる",
+        Language::English => "↑/↓ Select · Space Toggle · ←/→ Change · Enter/Esc Close",
     };
     let left = (cols - width) / 2;
     let top = (rows - height) / 2;
@@ -320,10 +454,10 @@ fn draw_file_candidates(
     let left = (cols - width) / 2;
     let top = status_row.saturating_sub(item_count as u16 + 1);
     let blank = " ".repeat(width as usize);
-    let title = if cfg.language == "ko" {
-        " 문서 선택  ↑/↓ 이동 · Tab 자동완성 · Enter 열기 "
-    } else {
-        " Choose a document  ↑/↓ Move · Tab Complete · Enter Open "
+    let title = match cfg.language.as_str() {
+        "ko" => " 문서 선택  ↑/↓ 이동 · Tab 자동완성 · Enter 열기 ",
+        "ja" => " 文書を選択  ↑/↓ 移動 · Tab 補完 · Enter 開く ",
+        _ => " Choose a document  ↑/↓ Move · Tab Complete · Enter Open ",
     };
     queue!(
         out,
@@ -382,15 +516,17 @@ fn draw_help(
         return Ok(());
     }
 
-    let korean = cfg.language == "ko";
-    let title = match (help.welcome, korean) {
-        (true, false) => "Welcome to Termleaf",
-        (false, false) => "Termleaf Help",
-        (true, true) => "Termleaf에 오신 것을 환영합니다",
-        (false, true) => "Termleaf 도움말",
+    let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
+    let title = match (help.welcome, locale) {
+        (true, Language::English) => "Welcome to Termleaf",
+        (false, Language::English) => "Termleaf Help",
+        (true, Language::Korean) => "Termleaf에 오신 것을 환영합니다",
+        (false, Language::Korean) => "Termleaf 도움말",
+        (true, Language::Japanese) => "Termleafへようこそ",
+        (false, Language::Japanese) => "Termleafヘルプ",
     };
-    let lines = if korean {
-        vec![
+    let lines = match locale {
+        Language::Korean => vec![
             "Termleaf는 두 가지 한글 입력 방식을 제공합니다.",
             "IME:OS(기본) — Linux 한/영 키 사용, 완성된 음절만 표시",
             "F2 직접 한글 — OS 입력을 영문으로 두면 ㅎ → 하 → 한 표시",
@@ -400,10 +536,21 @@ fn draw_help(
             "보기: F5 종이 폭 · Shift+F5 줄간격 1–3",
             "보조: macOS Option+P/L · Windows/Linux Alt+P/L",
             "소리: F10 설정(타이핑/삭제/엔터) · F11 타자음",
-            "기타: Backspace/Delete 삭제 · F9 English · F1 도움말 · Ctrl+Q 종료",
-        ]
-    } else {
-        vec![
+            "기타: Backspace/Delete 삭제 · F9 언어 · F1 도움말 · Ctrl+Q 종료",
+        ],
+        Language::Japanese => vec![
+            "日本語入力にはOSのIMEをそのまま使用します。",
+            "IME:OS（標準）— かな・漢字変換はmacOS/Linux側で確定",
+            "韓国語パック導入時のみF2でLive Koreanを利用可能",
+            "",
+            "ファイル: Ctrl+O 開く · Ctrl+S 保存 · F12 名前を付けて保存",
+            "表示: F3 集中 · F4 拡大文字 · F6 テーマ · F7/F8 サイズ",
+            "読みやすさ: F5 ページ幅 · Shift+F5 行間 1–3",
+            "代替: macOS Option+P/L · Windows/Linux Alt+P/L",
+            "サウンド: F10 設定 · F11 キー音スタイル",
+            "その他: F9 言語 · F1 ヘルプ · Ctrl+Q 終了",
+        ],
+        Language::English => vec![
             "Termleaf supports two Korean input paths.",
             "IME:OS (default) — use Linux input switching; final syllables only",
             "F2 Live Korean — keep OS input English to see ㅎ → 하 → 한",
@@ -413,8 +560,8 @@ fn draw_help(
             "Reading: F5 Page width · Shift+F5 Line spacing 1–3",
             "Alternates: macOS Option+P/L · Windows/Linux Alt+P/L",
             "Sound: F10 Settings (typing/delete/return) · F11 Key style",
-            "Other: Backspace/Delete · F9 Korean · F1 Help · Ctrl+Q Quit",
-        ]
+            "Other: Backspace/Delete · F9 Languages · F1 Help · Ctrl+Q Quit",
+        ],
     };
 
     // Keep the checkbox and close instructions visible on short terminals.
@@ -464,15 +611,15 @@ fn draw_help(
     }
 
     let checked = if help.hide_on_startup { "x" } else { " " };
-    let checkbox = if korean {
-        format!("[{checked}] 시작할 때 이 안내를 표시하지 않음")
-    } else {
-        format!("[{checked}] Don't show this welcome on startup")
+    let checkbox = match locale {
+        Language::Korean => format!("[{checked}] 시작할 때 이 안내를 표시하지 않음"),
+        Language::Japanese => format!("[{checked}] 起動時にこの案内を表示しない"),
+        Language::English => format!("[{checked}] Don't show this welcome on startup"),
     };
-    let controls = if korean {
-        "Space 선택 · Enter/Esc 닫기 · F9 영어"
-    } else {
-        "Space Toggle · Enter/Esc Close · F9 Korean"
+    let controls = match locale {
+        Language::Korean => "Space 선택 · Enter/Esc 닫기 · F9 언어",
+        Language::Japanese => "Space 切替 · Enter/Esc 閉じる · F9 言語",
+        Language::English => "Space Toggle · Enter/Esc Close · F9 Languages",
     };
     draw_help_line(
         out,
@@ -707,6 +854,7 @@ fn draw_big(
     cfg: &Config,
     theme: &Theme,
     layout: &Layout,
+    languages: &LanguageRegistry,
 ) -> io::Result<()> {
     let (focus_left, focus_width) = writing_column(cfg, layout.cols);
     // One terminal column is the theoretical minimum per glyph, so fetching
@@ -717,7 +865,7 @@ fn draw_big(
         return Ok(());
     }
 
-    let mut glyphs: Vec<Glyph> = chars.iter().map(|&c| glyph_for(c)).collect();
+    let mut glyphs: Vec<Glyph> = chars.iter().map(|&c| glyph_for(c, languages)).collect();
 
     // Honor the configured horizontal level by trimming old context first.
     // Previously the renderer silently reduced the scale to fit the whole
@@ -834,28 +982,33 @@ fn draw_status(
     cols: u16,
     row: u16,
 ) -> io::Result<()> {
-    let korean = cfg.language == "ko";
+    let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
     let mode = if cfg.live_composition {
         "IME:LIVE"
     } else {
         "IME:OS"
     };
-    let mut sound = if cfg.sound {
-        if korean {
-            format!("소리:{}", cfg.sound_profile)
-        } else {
-            format!("sound:{}", cfg.sound_profile)
-        }
-    } else if korean {
-        "무음".to_string()
-    } else {
-        "muted".to_string()
+    let mut sound = match (locale, cfg.sound) {
+        (Language::Korean, true) => format!("소리:{}", cfg.sound_profile),
+        (Language::Japanese, true) => format!("音:{}", cfg.sound_profile),
+        (Language::English, true) => format!("sound:{}", cfg.sound_profile),
+        (Language::Korean, false) => "무음".to_string(),
+        (Language::Japanese, false) => "消音".to_string(),
+        (Language::English, false) => "muted".to_string(),
     };
     if cfg.sound && !cfg.backspace_sound {
-        sound.push_str(if korean { " 삭제:끔" } else { " del:off" });
+        sound.push_str(match locale {
+            Language::Korean => " 삭제:끔",
+            Language::Japanese => " 削除:オフ",
+            Language::English => " del:off",
+        });
     }
     if cfg.sound && !cfg.return_sound {
-        sound.push_str(if korean { " 엔터:끔" } else { " return:off" });
+        sound.push_str(match locale {
+            Language::Korean => " 엔터:끔",
+            Language::Japanese => " 改行:オフ",
+            Language::English => " return:off",
+        });
     }
     let dirty = if editor.doc.dirty { "*" } else { "" };
     let name = editor
@@ -864,16 +1017,14 @@ fn draw_status(
         .as_ref()
         .and_then(|p| p.file_name())
         .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| {
-            if korean {
-                "제목 없음".to_string()
-            } else {
-                "untitled".to_string()
-            }
+        .unwrap_or_else(|| match locale {
+            Language::Korean => "제목 없음".to_string(),
+            Language::Japanese => "無題".to_string(),
+            Language::English => "untitled".to_string(),
         });
     let stage = editor.composer().stage();
-    let left = if korean {
-        format!(
+    let left = match locale {
+        Language::Korean => format!(
             " {mode} │ {sound} │ {dirty}{name} │ {}단어 {}자 │ 크기 {}/{} │ 줄 {}/{} │ 페이지:{} │ 조합 {stage}/3 ",
             editor.word_count(),
             editor.char_count(),
@@ -882,9 +1033,18 @@ fn draw_status(
             cfg.line_spacing,
             MAX_LINE_SPACING,
             if cfg.page_width { "켬" } else { "끔" },
-        )
-    } else {
-        format!(
+        ),
+        Language::Japanese => format!(
+            " {mode} │ {sound} │ {dirty}{name} │ {}語 {}文字 │ サイズ {}/{} │ 行間 {}/{} │ ページ:{} ",
+            editor.word_count(),
+            editor.char_count(),
+            cfg.font_size,
+            MAX_FONT,
+            cfg.line_spacing,
+            MAX_LINE_SPACING,
+            if cfg.page_width { "オン" } else { "オフ" },
+        ),
+        Language::English => format!(
             " {mode} │ {sound} │ {dirty}{name} │ {} words {} chars │ size {}/{} │ line {}/{} │ page:{} │ compose {stage}/3 ",
             editor.word_count(),
             editor.char_count(),
@@ -893,7 +1053,7 @@ fn draw_status(
             cfg.line_spacing,
             MAX_LINE_SPACING,
             if cfg.page_width { "on" } else { "off" },
-        )
+        ),
     };
 
     let bar: String = " ".repeat(cols as usize);
@@ -917,7 +1077,7 @@ fn draw_shortcuts(
     cols: u16,
     row: u16,
 ) -> io::Result<()> {
-    let korean = cfg.language == "ko";
+    let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
     let bar: String = " ".repeat(cols as usize);
     queue!(
         out,
@@ -929,24 +1089,38 @@ fn draw_shortcuts(
     )?;
 
     if prompt.is_none() {
-        return draw_shortcut_guide(out, shortcut_guide(korean, cols), theme, cols);
+        return draw_shortcut_guide(out, shortcut_guide(locale, cols), theme, cols);
     }
 
     let text = if let Some(error) = prompt.and_then(|prompt| prompt.error.as_ref()) {
-        let message = localized_prompt_error(error, korean);
-        if korean {
-            format!(" 오류: {message}  │  Esc 취소 ")
-        } else {
-            format!(" Error: {message}  │  Esc Cancel ")
+        let message = localized_prompt_error(error, locale);
+        match locale {
+            Language::Korean => format!(" 오류: {message}  │  Esc 취소 "),
+            Language::Japanese => format!(" エラー: {message}  │  Esc キャンセル "),
+            Language::English => format!(" Error: {message}  │  Esc Cancel "),
         }
-    } else if prompt.is_some_and(|prompt| prompt.kind == FilePromptKind::Open) && korean {
-        " ↑/↓ 선택  Tab 자동완성  Enter 열기  Esc 취소  F1 도움말 ".to_string()
     } else if prompt.is_some_and(|prompt| prompt.kind == FilePromptKind::Open) {
-        " ↑/↓ Select  Tab Complete  Enter Open  Esc Cancel  F1 Help ".to_string()
-    } else if prompt.is_some() && korean {
-        " Enter 저장  Esc 취소  │ 확장자 생략 시 .md  F9 영어 ".to_string()
+        match locale {
+            Language::Korean => {
+                " ↑/↓ 선택  Tab 자동완성  Enter 열기  Esc 취소  F1 도움말 ".to_string()
+            }
+            Language::Japanese => {
+                " ↑/↓ 選択  Tab 補完  Enter 開く  Esc キャンセル  F1 ヘルプ ".to_string()
+            }
+            Language::English => {
+                " ↑/↓ Select  Tab Complete  Enter Open  Esc Cancel  F1 Help ".to_string()
+            }
+        }
     } else if prompt.is_some() {
-        " Enter Save  Esc Cancel  │ No extension → .md  F9 Korean ".to_string()
+        match locale {
+            Language::Korean => " Enter 저장  Esc 취소  │ 확장자 생략 시 .md  F9 언어 ".to_string(),
+            Language::Japanese => {
+                " Enter 保存  Esc キャンセル  │ 拡張子なし → .md  F9 言語 ".to_string()
+            }
+            Language::English => {
+                " Enter Save  Esc Cancel  │ No extension → .md  F9 Languages ".to_string()
+            }
+        }
     } else {
         unreachable!("the persistent guide is rendered before prompt-specific hints")
     };
@@ -1018,8 +1192,10 @@ impl ShortcutGuide {
 
 const CTRL_EN: &[(&str, &str)] = &[("O", "Open"), ("S", "Save"), ("Q", "Quit")];
 const CTRL_KO: &[(&str, &str)] = &[("O", "열기"), ("S", "저장"), ("Q", "종료")];
+const CTRL_JA: &[(&str, &str)] = &[("O", "開く"), ("S", "保存"), ("Q", "終了")];
 const CTRL_QUIT_EN: &[(&str, &str)] = &[("Q", "Quit")];
 const CTRL_QUIT_KO: &[(&str, &str)] = &[("Q", "종료")];
+const CTRL_QUIT_JA: &[(&str, &str)] = &[("Q", "終了")];
 
 const F_WIDE_EN: &[(&str, &str)] = &[
     ("F1", "Help"),
@@ -1029,7 +1205,7 @@ const F_WIDE_EN: &[(&str, &str)] = &[
     ("F5", "Page"),
     ("F6", "Theme"),
     ("F7/8", "Size"),
-    ("F9", "한국어"),
+    ("F9", "Languages"),
     ("F10", "Sound"),
     ("F12", "Save-as"),
 ];
@@ -1041,9 +1217,21 @@ const F_WIDE_KO: &[(&str, &str)] = &[
     ("F5", "종이폭"),
     ("F6", "테마"),
     ("F7/8", "크기"),
-    ("F9", "영어"),
+    ("F9", "언어"),
     ("F10", "소리"),
     ("F12", "다른이름"),
+];
+const F_WIDE_JA: &[(&str, &str)] = &[
+    ("F1", "ヘルプ"),
+    ("F2", "入力"),
+    ("F3", "集中"),
+    ("F4", "拡大"),
+    ("F5", "ページ"),
+    ("F6", "テーマ"),
+    ("F7/8", "サイズ"),
+    ("F9", "言語"),
+    ("F10", "サウンド"),
+    ("F12", "別名保存"),
 ];
 const F_STANDARD_EN: &[(&str, &str)] = &[
     ("F1", "Help"),
@@ -1051,7 +1239,7 @@ const F_STANDARD_EN: &[(&str, &str)] = &[
     ("F5", "Page"),
     ("F6", "Theme"),
     ("F7/8", "Size"),
-    ("F9", "한국어"),
+    ("F9", "Languages"),
     ("F10", "Sound"),
 ];
 const F_STANDARD_KO: &[(&str, &str)] = &[
@@ -1060,17 +1248,30 @@ const F_STANDARD_KO: &[(&str, &str)] = &[
     ("F5", "종이폭"),
     ("F6", "테마"),
     ("F7/8", "크기"),
-    ("F9", "영어"),
+    ("F9", "언어"),
     ("F10", "소리"),
+];
+const F_STANDARD_JA: &[(&str, &str)] = &[
+    ("F1", "ヘルプ"),
+    ("F3", "集中"),
+    ("F5", "ページ"),
+    ("F6", "テーマ"),
+    ("F7/8", "サイズ"),
+    ("F9", "言語"),
+    ("F10", "音"),
 ];
 const F_COMPACT_EN: &[(&str, &str)] = &[("F1", "Help"), ("F5", "Page"), ("F10", "Sound")];
 const F_COMPACT_KO: &[(&str, &str)] = &[("F1", "도움"), ("F5", "종이"), ("F10", "소리")];
+const F_COMPACT_JA: &[(&str, &str)] = &[("F1", "ヘルプ"), ("F5", "幅"), ("F10", "音")];
 const F_NARROW_EN: &[(&str, &str)] = &[("F5", "Page"), ("F10", "Sound")];
 const F_NARROW_KO: &[(&str, &str)] = &[("F5", "종이"), ("F10", "소리")];
+const F_NARROW_JA: &[(&str, &str)] = &[("F5", "幅"), ("F10", "音")];
 const F_TINY_EN: &[(&str, &str)] = F_NARROW_EN;
 const F_TINY_KO: &[(&str, &str)] = F_NARROW_KO;
+const F_TINY_JA: &[(&str, &str)] = F_NARROW_JA;
 const SPACING_EN: &[(&str, &str)] = &[("F5", "Spacing")];
 const SPACING_KO: &[(&str, &str)] = &[("F5", "줄간격")];
+const SPACING_JA: &[(&str, &str)] = &[("F5", "行間")];
 
 const WIDE_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_EN),
@@ -1082,6 +1283,11 @@ const WIDE_KO: &[ShortcutGroup] = &[
     shortcut_group(None, F_WIDE_KO),
     shortcut_group(Some("Shift"), SPACING_KO),
 ];
+const WIDE_JA: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_JA),
+    shortcut_group(None, F_WIDE_JA),
+    shortcut_group(Some("Shift"), SPACING_JA),
+];
 const STANDARD_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_EN),
     shortcut_group(None, F_STANDARD_EN),
@@ -1091,6 +1297,11 @@ const STANDARD_KO: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_KO),
     shortcut_group(None, F_STANDARD_KO),
     shortcut_group(Some("Shift"), SPACING_KO),
+];
+const STANDARD_JA: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_JA),
+    shortcut_group(None, F_STANDARD_JA),
+    shortcut_group(Some("Shift"), SPACING_JA),
 ];
 const COMPACT_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_QUIT_EN),
@@ -1102,6 +1313,11 @@ const COMPACT_KO: &[ShortcutGroup] = &[
     shortcut_group(None, F_COMPACT_KO),
     shortcut_group(Some("Shift"), SPACING_KO),
 ];
+const COMPACT_JA: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), CTRL_QUIT_JA),
+    shortcut_group(None, F_COMPACT_JA),
+    shortcut_group(Some("Shift"), SPACING_JA),
+];
 const NARROW_EN: &[ShortcutGroup] = &[
     shortcut_group(None, F_NARROW_EN),
     shortcut_group(Some("Shift"), SPACING_EN),
@@ -1110,14 +1326,19 @@ const NARROW_KO: &[ShortcutGroup] = &[
     shortcut_group(None, F_NARROW_KO),
     shortcut_group(Some("Shift"), SPACING_KO),
 ];
+const NARROW_JA: &[ShortcutGroup] = &[
+    shortcut_group(None, F_NARROW_JA),
+    shortcut_group(Some("Shift"), SPACING_JA),
+];
 const TINY_EN: &[ShortcutGroup] = &[shortcut_group(None, F_TINY_EN)];
 const TINY_KO: &[ShortcutGroup] = &[shortcut_group(None, F_TINY_KO)];
+const TINY_JA: &[ShortcutGroup] = &[shortcut_group(None, F_TINY_JA)];
 
-fn shortcut_guide(korean: bool, cols: u16) -> ShortcutGuide {
-    let choices = if korean {
-        [WIDE_KO, STANDARD_KO, COMPACT_KO, NARROW_KO, TINY_KO]
-    } else {
-        [WIDE_EN, STANDARD_EN, COMPACT_EN, NARROW_EN, TINY_EN]
+fn shortcut_guide(language: Language, cols: u16) -> ShortcutGuide {
+    let choices = match language {
+        Language::Korean => [WIDE_KO, STANDARD_KO, COMPACT_KO, NARROW_KO, TINY_KO],
+        Language::Japanese => [WIDE_JA, STANDARD_JA, COMPACT_JA, NARROW_JA, TINY_JA],
+        Language::English => [WIDE_EN, STANDARD_EN, COMPACT_EN, NARROW_EN, TINY_EN],
     };
 
     choices
@@ -1193,7 +1414,7 @@ fn draw_file_prompt(
     cols: u16,
     row: u16,
 ) -> io::Result<(u16, u16)> {
-    let prefix = format!(" {}: ", prompt.label(cfg.language == "ko"));
+    let prefix = format!(" {}: ", prompt.label(&cfg.language));
     let full = format!("{prefix}{}", prompt.input);
     let visible = clipped_from_end(&full, cols.saturating_sub(1));
     let width = visible.chars().map(char_width).sum::<u16>();
@@ -1210,20 +1431,32 @@ fn draw_file_prompt(
     Ok((width.min(cols.saturating_sub(1)), row))
 }
 
-fn localized_prompt_error(error: &FilePromptError, korean: bool) -> String {
-    match (error, korean) {
-        (FilePromptError::EmptyPath, false) => "Enter a file path".to_string(),
-        (FilePromptError::UnsavedChanges, false) => {
+fn localized_prompt_error(error: &FilePromptError, language: Language) -> String {
+    match (error, language) {
+        (FilePromptError::EmptyPath, Language::English) => "Enter a file path".to_string(),
+        (FilePromptError::UnsavedChanges, Language::English) => {
             "Unsaved changes: press Esc and save first".to_string()
         }
-        (FilePromptError::OpenFailed(error), false) => format!("Open failed: {error}"),
-        (FilePromptError::SaveFailed(error), false) => format!("Save failed: {error}"),
-        (FilePromptError::EmptyPath, true) => "파일 경로를 입력하세요".to_string(),
-        (FilePromptError::UnsavedChanges, true) => {
+        (FilePromptError::OpenFailed(error), Language::English) => format!("Open failed: {error}"),
+        (FilePromptError::SaveFailed(error), Language::English) => format!("Save failed: {error}"),
+        (FilePromptError::EmptyPath, Language::Korean) => "파일 경로를 입력하세요".to_string(),
+        (FilePromptError::UnsavedChanges, Language::Korean) => {
             "저장하지 않은 변경이 있습니다. Esc 후 먼저 저장하세요".to_string()
         }
-        (FilePromptError::OpenFailed(error), true) => format!("불러오기 실패: {error}"),
-        (FilePromptError::SaveFailed(error), true) => format!("저장 실패: {error}"),
+        (FilePromptError::OpenFailed(error), Language::Korean) => format!("불러오기 실패: {error}"),
+        (FilePromptError::SaveFailed(error), Language::Korean) => format!("저장 실패: {error}"),
+        (FilePromptError::EmptyPath, Language::Japanese) => {
+            "ファイルパスを入力してください".to_string()
+        }
+        (FilePromptError::UnsavedChanges, Language::Japanese) => {
+            "未保存の変更があります。Escで戻って先に保存してください".to_string()
+        }
+        (FilePromptError::OpenFailed(error), Language::Japanese) => {
+            format!("開けませんでした: {error}")
+        }
+        (FilePromptError::SaveFailed(error), Language::Japanese) => {
+            format!("保存できませんでした: {error}")
+        }
     }
 }
 
@@ -1267,27 +1500,27 @@ mod tests {
 
     #[test]
     fn shortcut_guide_groups_shared_modifiers_like_a_modal_status_bar() {
-        for korean in [false, true] {
-            let guide = shortcut_guide(korean, 180);
+        for language in Language::ALL {
+            let guide = shortcut_guide(language, 180);
             let labels: Vec<Option<&str>> =
                 guide.groups.iter().map(|group| group.modifier).collect();
             assert_eq!(labels, [Some("Ctrl"), None, Some("Shift")]);
 
             let text = guide.plain_text();
             assert_eq!(text.matches("Ctrl").count(), 1);
-            assert!(text.contains(if korean {
-                "Ctrl O 열기 S 저장 Q 종료"
-            } else {
-                "Ctrl O Open S Save Q Quit"
+            assert!(text.contains(match language {
+                Language::Korean => "Ctrl O 열기 S 저장 Q 종료",
+                Language::Japanese => "Ctrl O 開く S 保存 Q 終了",
+                Language::English => "Ctrl O Open S Save Q Quit",
             }));
         }
     }
 
     #[test]
     fn shortcut_guide_adapts_without_hiding_primary_reading_and_sound_settings() {
-        for korean in [false, true] {
+        for language in Language::ALL {
             for width in [24, 40, 80, 180] {
-                let guide = shortcut_guide(korean, width);
+                let guide = shortcut_guide(language, width);
                 let text = guide.plain_text();
                 assert!(guide.width() <= width);
                 assert!(text.contains("F5"));
@@ -1301,8 +1534,9 @@ mod tests {
             }
         }
 
-        assert!(!shortcut_guide(false, 40).plain_text().contains("Alt+L"));
-        assert!(!shortcut_guide(true, 40).plain_text().contains("Alt+L"));
+        for language in Language::ALL {
+            assert!(!shortcut_guide(language, 40).plain_text().contains("Alt+L"));
+        }
     }
 
     #[test]
@@ -1390,7 +1624,9 @@ mod tests {
 
     #[test]
     fn wider_focus_areas_show_more_big_glyphs() {
-        let glyphs = vec![glyph_for('a'); 30];
+        let languages =
+            LanguageRegistry::load_from(std::env::temp_dir().join("termleaf-terminal-font"));
+        let glyphs = vec![glyph_for('a', &languages); 30];
         let mut narrow = glyphs.clone();
         let mut wide = glyphs;
         trim_glyphs_to_width(&mut narrow, 1, 40);

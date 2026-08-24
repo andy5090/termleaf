@@ -1,4 +1,6 @@
 /target
+termleaf-language-*.tar.xz
+termleaf-language-*.tar.xz.sha256
 /.omx/
 **/*.rs.bk
 *.swp

@@ -1,0 +1,7 @@
+schema = 1
+id = ko
+name = 한국어
+english_name = Korean
+interface = true
+big_glyphs = true
+live_composition = hangul-2set

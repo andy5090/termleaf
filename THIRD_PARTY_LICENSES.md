@@ -2,8 +2,10 @@
 
 ## Galmuri9 2.40.4
 
-Termleaf includes a converted subset of Galmuri9 containing printable ASCII,
-Hangul Compatibility Jamo, and all 11,172 precomposed Hangul syllables.
+Termleaf includes a converted English core and optional Korean/Japanese glyph
+packs. Together they cover printable ASCII, Hangul Compatibility Jamo, all
+11,172 precomposed Hangul syllables, kana, fullwidth forms, CJK punctuation,
+and the CJK ideographs available in Galmuri9.
 
 Copyright © 2019–2025 Lee Minseo (quiple@quiple.dev)
 

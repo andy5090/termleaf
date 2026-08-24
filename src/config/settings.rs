@@ -37,7 +37,7 @@ pub struct Config {
     pub page_width: bool,
     /// Theme name (resolved by `ui::themes`).
     pub theme: String,
-    /// Interface language (`en` or `ko`).
+    /// Interface language (`en`, `ko`, or `ja`).
     pub language: String,
     /// Show the welcome/help overlay when Termleaf starts.
     pub show_welcome: bool,
@@ -132,6 +132,7 @@ impl Config {
                 "language" => {
                     cfg.language = match value {
                         "ko" => "ko",
+                        "ja" => "ja",
                         _ => "en",
                     }
                     .to_string();
@@ -210,8 +211,13 @@ impl Config {
         };
     }
 
-    pub fn toggle_language(&mut self) {
-        self.language = if self.language == "ko" { "en" } else { "ko" }.to_string();
+    pub fn set_language(&mut self, language: &str) {
+        self.language = match language {
+            "ko" => "ko",
+            "ja" => "ja",
+            _ => "en",
+        }
+        .to_string();
     }
 
     pub fn cycle_sound_profile(&mut self) {
@@ -287,12 +293,14 @@ mod tests {
     }
 
     #[test]
-    fn interface_language_defaults_to_english_and_toggles() {
+    fn interface_language_defaults_to_english_and_supports_installed_locales() {
         let mut cfg = Config::default();
         assert_eq!(cfg.language, "en");
-        cfg.toggle_language();
+        cfg.set_language("ko");
         assert_eq!(cfg.language, "ko");
-        cfg.toggle_language();
+        cfg.set_language("ja");
+        assert_eq!(cfg.language, "ja");
+        cfg.set_language("unsupported");
         assert_eq!(cfg.language, "en");
     }
 

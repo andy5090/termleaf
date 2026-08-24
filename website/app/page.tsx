@@ -3,8 +3,11 @@ import { CopyCommand } from "./CopyCommand";
 import { LanguageSelector } from "./LanguageSelector";
 import { detectLocale, type Locale } from "./locale";
 
-const installCommand =
-  "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/andy5090/termleaf/releases/latest/download/termleaf-installer.sh | sh";
+const installCommands: Record<Locale, string> = {
+  en: "curl -fsSL https://termleaf.com/install | sh",
+  ko: "curl -fsSL https://termleaf.com/install/ko | sh",
+  ja: "curl -fsSL https://termleaf.com/install/ja | sh",
+};
 
 const content = {
   en: {
@@ -19,7 +22,7 @@ const content = {
       install: "Install now",
       source: "View source",
       factsLabel: "Product highlights",
-      facts: ["Open source", "Korean-ready"],
+      facts: ["Open source", "Language packs"],
     },
     terminal: {
       label: "Example of the Termleaf writing screen",
@@ -48,9 +51,9 @@ const content = {
         },
         {
           number: "03",
-          title: "Big type, built for Korean",
+          title: "Big type, language-ready",
           description:
-            "Galmuri9 pixel type enlarges the sentence around your cursor, with full support for precomposed Hangul.",
+            "Optional Korean and Japanese packs extend Galmuri9 pixel type across Hangul, kana, and thousands of CJK glyphs.",
         },
         {
           number: "04",
@@ -161,7 +164,7 @@ const content = {
       kicker: "ONE COMMAND AWAY",
       title: ["터미널을 열고,", "바로 시작하세요."],
       description:
-        "한 줄이면 설치가 끝납니다. 터미널을 열고 바로 첫 문장을 시작하세요.",
+        "한 줄이면 Termleaf와 한국어팩 설치가 끝납니다. 바로 한국어 화면에서 첫 문장을 시작하세요.",
       stable: "최신 안정 버전",
       after: "설치 후 실행",
       copy: {
@@ -172,6 +175,89 @@ const content = {
       },
     },
     footerTagline: "오직 당신과 문장, 그리고 터미널.",
+  },
+  ja: {
+    brandHome: "Termleaf ホーム",
+    navLabel: "メインナビゲーション",
+    nav: { features: "機能", install: "インストール" },
+    hero: {
+      headline: "書く。",
+      emphasis: "それだけ。",
+      description:
+        "Termleafは、書くことだけに集中するためのターミナルテキストエディターです。プレーンテキスト、静かな画面、実録したタイプライター音の心地よいリズム。",
+      install: "今すぐインストール",
+      source: "ソースを見る",
+      factsLabel: "製品の特徴",
+      facts: ["オープンソース", "日本語パック"],
+    },
+    terminal: {
+      label: "Termleafの編集画面例",
+    },
+    manifesto: {
+      kicker: "WHY TERMLEAF",
+      title: ["エディターを静かに。", "文章を鮮明に。"],
+      description:
+        "コードのための道具は数多くあります。Termleafが選んだのは、もっと小さな目的です。文書を開き、考えを書き、保存する。その瞬間、画面には言葉だけが残ります。",
+    },
+    features: {
+      kicker: "MADE FOR WRITING",
+      title: "小さくても、書くためには十分。",
+      items: [
+        {
+          number: "01",
+          title: "文章だけの集中モード",
+          description:
+            "パネルや通知を片付け、文章だけを残します。F3を一度押せば、いつでも元に戻せます。",
+        },
+        {
+          number: "02",
+          title: "紙のように読みやすい画面",
+          description:
+            "80桁のページ幅、3段階の行間、文書を変えない折り返しで、長い段落も快適に読めます。",
+        },
+        {
+          number: "03",
+          title: "日本語に対応した拡大文字",
+          description:
+            "Galmuri9のピクセル文字でカーソル周辺を大きく表示。ひらがな、カタカナ、6,000字以上のCJK字形を収録します。",
+        },
+        {
+          number: "04",
+          title: "実録タイプライターサウンド",
+          description:
+            "実際のタイプライター録音から整えた打鍵、削除、キャリッジリターン音が、下書きに心地よいリズムを与えます。",
+        },
+      ],
+    },
+    themes: {
+      kicker: "FOUR MOODS",
+      title: "書く時間に合う光。",
+      description:
+        "明るい紙、深い黒、蛍光グリーン、琥珀色のターミナルまで。",
+      label: "Termleafのテーマ",
+      line: "静かに言葉を書く場所_",
+      items: [
+        { name: "paper", label: "ペーパー", className: "theme-paper" },
+        { name: "night", label: "ナイト", className: "theme-night" },
+        { name: "xt", label: "蛍光", className: "theme-xt" },
+        { name: "amber", label: "アンバー", className: "theme-amber" },
+      ],
+    },
+    install: {
+      kicker: "ONE COMMAND AWAY",
+      title: ["ターミナルを開いて、", "すぐに書き始める。"],
+      description:
+        "一行でTermleafと日本語パックをまとめてインストール。最初から日本語画面で書き始められます。",
+      stable: "最新安定版",
+      after: "インストール後に実行",
+      copy: {
+        copy: "コピー",
+        copied: "コピー済み",
+        ariaLabel: "インストールコマンドをコピー",
+        announcement: "インストールコマンドをクリップボードにコピーしました。",
+      },
+    },
+    footerTagline: "あなたと言葉、そしてターミナル。",
   },
 } as const;
 
@@ -338,7 +424,7 @@ export default async function Home() {
             <span>macOS / Linux</span>
             <span>{copy.install.stable}</span>
           </div>
-          <CopyCommand command={installCommand} labels={copy.install.copy} />
+          <CopyCommand command={installCommands[locale]} labels={copy.install.copy} />
           <div className="run-command">
             <span>{copy.install.after}</span>
             <code>termleaf memo.md</code>

@@ -1,0 +1,7 @@
+schema = 1
+id = ja
+name = 日本語
+english_name = Japanese
+interface = true
+big_glyphs = true
+input = os-ime

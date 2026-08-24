@@ -159,6 +159,15 @@ nav a:hover {
   gap: 72px;
 }
 
+.hero > * {
+  min-width: 0;
+}
+
+:lang(ja) .hero-description {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
 .eyebrow,
 .section-kicker {
   margin: 0 0 24px;
@@ -656,7 +665,13 @@ footer {
   }
 
   .button {
-    flex: 1;
+    width: 100%;
+    flex: none;
+    white-space: normal;
+  }
+
+  .hero-actions {
+    flex-direction: column;
   }
 
   .terminal-window-shell {

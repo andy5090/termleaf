@@ -7,6 +7,20 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Added installable Korean and Japanese language packs with localized in-app
+  guidance and enlarged Hangul, kana, fullwidth, and CJK glyph coverage.
+- Added `termleaf language` commands and an `F9` language manager for listing,
+  installing, selecting, and removing language support.
+- Added Japanese website localization and short locale-aware installers at
+  `termleaf.com/install`, `/install/ko`, and `/install/ja`.
+
+### Changed
+
+- Reduced the built-in enlarged font to the English core; optional data-only
+  language packs now carry their own licensed glyph data.
+
 ## [0.3.7] - 2026-08-13
 
 ### Added

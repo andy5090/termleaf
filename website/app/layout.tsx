@@ -25,14 +25,22 @@ export async function generateMetadata(): Promise<Metadata> {
         title: "Termleaf — 터미널에, 글만 남기다",
         description: "쓰는 일에만 집중하도록 만든 오픈 소스 터미널 텍스트 에디터.",
         ogLocale: "ko_KR",
-        alternateLocale: "en_US",
+        alternateLocale: ["en_US", "ja_JP"],
         image: "/og.png",
       }
+    : locale === "ja"
+      ? {
+          title: "Termleaf — 書く。それだけ。",
+          description: "書くことだけに集中するためのオープンソース・ターミナルテキストエディター。",
+          ogLocale: "ja_JP",
+          alternateLocale: ["en_US", "ko_KR"],
+          image: "/og-en.png",
+        }
     : {
         title: "Termleaf — Write. Nothing else.",
         description: "A distraction-free terminal text editor built for focused writing.",
         ogLocale: "en_US",
-        alternateLocale: "ko_KR",
+        alternateLocale: ["ko_KR", "ja_JP"],
         image: "/og-en.png",
       };
 

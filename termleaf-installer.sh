@@ -5,6 +5,7 @@ set -eu
 
 quiet=0
 modify_path=1
+language=""
 
 say() {
     if [ "$quiet" -eq 0 ]; then
@@ -61,6 +62,7 @@ Usage: termleaf-installer.sh [OPTIONS]
 Options:
   --quiet           Suppress informational output
   --no-modify-path  Do not update the shell PATH
+  --language CODE   Install and use en, ko, or ja
   -h, --help        Show this help
 
 Environment:
@@ -77,6 +79,14 @@ while [ "$#" -gt 0 ]; do
             ;;
         --no-modify-path)
             modify_path=0
+            ;;
+        --language)
+            shift
+            [ "$#" -gt 0 ] || die "--language requires en, ko, or ja"
+            case "$1" in
+                en | ko | ja) language=$1 ;;
+                *) die "unsupported language: $1 (expected en, ko, or ja)" ;;
+            esac
             ;;
         -h | --help)
             usage
@@ -216,6 +226,15 @@ cp "$archive_root/termleaf" "$staging_path"
 chmod 755 "$staging_path"
 mv -f "$staging_path" "$bin_dir/termleaf"
 
+if [ -n "$language" ]; then
+    if [ "$language" = "en" ]; then
+        "$bin_dir/termleaf" language use en
+    else
+        TERMLEAF_LANGUAGE_PACK_URL="$download_base" \
+            "$bin_dir/termleaf" language install "$language" --use
+    fi
+fi
+
 path_changed=0
 case ":${PATH:-}:" in
     *":$bin_dir:"*) ;;
@@ -253,6 +272,9 @@ EOF
 esac
 
 say "Installed termleaf in $bin_dir"
+if [ -n "$language" ]; then
+    say "Configured Termleaf for $language."
+fi
 if [ "$path_changed" -eq 1 ]; then
     say "Open a new terminal before running termleaf."
 elif ! command -v termleaf >/dev/null 2>&1; then

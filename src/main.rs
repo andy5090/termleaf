@@ -8,6 +8,7 @@ mod audio;
 mod config;
 mod editor;
 mod input;
+mod language;
 mod renderer;
 mod ui;
 mod update;
@@ -23,8 +24,12 @@ use audio::SoundPlayer;
 use config::Config;
 use editor::Editor;
 use input::{map_key, Action};
+use language::{Language, LanguageRegistry};
 use renderer::{draw, TerminalGuard};
-use ui::{FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, SoundSettings, Theme};
+use ui::{
+    FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, LanguageSettings, SoundSettings,
+    Theme,
+};
 
 fn main() -> io::Result<()> {
     let path = match parse_startup_args(std::env::args_os().skip(1).collect()) {
@@ -44,6 +49,13 @@ fn main() -> io::Result<()> {
             }
             return Ok(());
         }
+        Ok(StartupRequest::Language(command)) => {
+            if let Err(error) = run_language_command(command) {
+                eprintln!("termleaf language: {error}");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
         Ok(StartupRequest::Version) => {
             println!("termleaf {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
@@ -54,6 +66,19 @@ fn main() -> io::Result<()> {
         }
     };
     let mut cfg = Config::load();
+    let mut languages = LanguageRegistry::load();
+    if let Some(language) = Language::from_code(&cfg.language) {
+        if !languages.is_installed(language) {
+            eprintln!(
+                "Installing the {} language pack for your existing configuration...",
+                language.native_name()
+            );
+            if let Err(error) = languages.install(language) {
+                eprintln!("Could not install {language:?}: {error}. Starting in English.");
+                cfg.set_language("en");
+            }
+        }
+    }
 
     let mut editor = match &path {
         Some(path) => Editor::open(path)?,
@@ -70,6 +95,7 @@ fn main() -> io::Result<()> {
         file_prompt: None,
         help: cfg.show_welcome.then(HelpOverlay::welcome),
         sound_settings: None,
+        language_settings: None,
     };
     let mut needs_redraw = true;
 
@@ -77,12 +103,16 @@ fn main() -> io::Result<()> {
         if needs_redraw {
             draw(
                 &mut stdout,
-                &editor,
-                &cfg,
-                &theme,
-                ui.file_prompt.as_ref(),
-                ui.help.as_ref(),
-                ui.sound_settings.as_ref(),
+                renderer::terminal::View {
+                    editor: &editor,
+                    cfg: &cfg,
+                    theme: &theme,
+                    prompt: ui.file_prompt.as_ref(),
+                    help: ui.help.as_ref(),
+                    sound_settings: ui.sound_settings.as_ref(),
+                    language_settings: ui.language_settings.as_ref(),
+                    languages: &languages,
+                },
             )?;
             needs_redraw = false;
         }
@@ -92,7 +122,29 @@ fn main() -> io::Result<()> {
         if event::poll(Duration::from_millis(500))? {
             match event::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
-                    if ui.help.is_some() {
+                    if key.code == KeyCode::F(9) {
+                        if ui.language_settings.is_some() {
+                            ui.language_settings = None;
+                        } else {
+                            ui.file_prompt = None;
+                            if let Some(help) = ui.help.take() {
+                                cfg.show_welcome = !help.hide_on_startup;
+                            }
+                            ui.sound_settings = None;
+                            ui.language_settings = Some(LanguageSettings::new(&cfg.language));
+                        }
+                        needs_redraw = true;
+                    } else if ui.language_settings.is_some() {
+                        if handle_language_settings_key(
+                            key,
+                            &mut cfg,
+                            &mut languages,
+                            &mut ui.language_settings,
+                        ) {
+                            break;
+                        }
+                        needs_redraw = true;
+                    } else if ui.help.is_some() {
                         if handle_help_key(key, &mut cfg, &mut ui.help) {
                             break;
                         }
@@ -109,9 +161,7 @@ fn main() -> io::Result<()> {
                             needs_redraw = true;
                             continue;
                         }
-                        if key.code == KeyCode::F(9) {
-                            cfg.toggle_language();
-                        } else if handle_file_prompt(key, &mut editor, &mut ui.file_prompt) {
+                        if handle_file_prompt(key, &mut editor, &mut ui.file_prompt) {
                             break;
                         }
                         needs_redraw = true;
@@ -121,7 +171,15 @@ fn main() -> io::Result<()> {
                             break;
                         }
                         needs_redraw = !matches!(action, Action::Ignore);
-                        apply(&mut editor, &mut cfg, &mut theme, &sound, &mut ui, action);
+                        apply(
+                            &mut editor,
+                            &mut cfg,
+                            &mut theme,
+                            &sound,
+                            &languages,
+                            &mut ui,
+                            action,
+                        );
                     }
                 }
                 Event::Resize(_, _) => needs_redraw = true,
@@ -144,7 +202,17 @@ enum StartupRequest {
     Help,
     Update { force: bool },
     UpdateHelp,
+    Language(LanguageCommand),
     Version,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LanguageCommand {
+    List,
+    Install { language: Language, use_after: bool },
+    Use(Language),
+    Remove(Language),
+    Help,
 }
 
 fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
@@ -163,6 +231,32 @@ fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
             "unknown update option '{}'; try 'termleaf update --help'",
             option.to_string_lossy()
         )),
+        [command] if command == "language" => Ok(StartupRequest::Language(LanguageCommand::List)),
+        [command, subcommand]
+            if command == "language" && (subcommand == "-h" || subcommand == "--help") =>
+        {
+            Ok(StartupRequest::Language(LanguageCommand::Help))
+        }
+        [command, subcommand] if command == "language" && subcommand == "list" => {
+            Ok(StartupRequest::Language(LanguageCommand::List))
+        }
+        [command, subcommand, code]
+            if command == "language"
+                && matches!(
+                    subcommand.to_string_lossy().as_ref(),
+                    "install" | "use" | "remove"
+                ) =>
+        {
+            parse_language_command(subcommand, code, false)
+        }
+        [command, subcommand, code, flag]
+            if command == "language" && subcommand == "install" && flag == "--use" =>
+        {
+            parse_language_command(subcommand, code, true)
+        }
+        [command, ..] if command == "language" => {
+            Err("invalid language command; try 'termleaf language --help'".to_string())
+        }
         [separator, path] if separator == "--" => {
             Ok(StartupRequest::Edit(Some(PathBuf::from(path))))
         }
@@ -174,6 +268,26 @@ fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
     }
 }
 
+fn parse_language_command(
+    subcommand: &OsString,
+    code: &OsString,
+    use_after: bool,
+) -> Result<StartupRequest, String> {
+    let code = code.to_string_lossy();
+    let language = Language::from_code(&code)
+        .ok_or_else(|| format!("unsupported language '{code}'; expected en, ko, or ja"))?;
+    let command = match subcommand.to_string_lossy().as_ref() {
+        "install" => LanguageCommand::Install {
+            language,
+            use_after,
+        },
+        "use" => LanguageCommand::Use(language),
+        "remove" => LanguageCommand::Remove(language),
+        _ => return Err("invalid language command".into()),
+    };
+    Ok(StartupRequest::Language(command))
+}
+
 fn print_help() {
     println!(
         "Termleaf {version} — focused writing in the terminal
@@ -181,9 +295,11 @@ fn print_help() {
 Usage:
   termleaf [FILE]
   termleaf update [--force]
+  termleaf language <COMMAND>
 
 Commands:
   update           Update to the latest GitHub release
+  language         List, install, select, or remove language packs
 
 Arguments:
   [FILE]           Open a document, or create it when first saved
@@ -195,6 +311,93 @@ Options:
 Inside Termleaf, press F1 for editing shortcuts and input guidance.",
         version = env!("CARGO_PKG_VERSION")
     );
+}
+
+fn print_language_help() {
+    println!(
+        "Manage Termleaf language packs.
+
+Usage:
+  termleaf language list
+  termleaf language install <en|ko|ja> [--use]
+  termleaf language use <en|ko|ja>
+  termleaf language remove <ko|ja>"
+    );
+}
+
+fn run_language_command(command: LanguageCommand) -> Result<(), String> {
+    if command == LanguageCommand::Help {
+        print_language_help();
+        return Ok(());
+    }
+    let mut config = Config::load();
+    let mut registry = LanguageRegistry::load();
+    match command {
+        LanguageCommand::List => {
+            for language in Language::ALL {
+                let active = if config.language == language.code() {
+                    "active"
+                } else {
+                    ""
+                };
+                let state = if language.is_builtin() {
+                    "built in"
+                } else if registry.is_installed(language) {
+                    "installed"
+                } else {
+                    "available"
+                };
+                println!(
+                    "{:<3}  {:<10}  {:<10} {}",
+                    language.code(),
+                    language.native_name(),
+                    state,
+                    active
+                );
+            }
+        }
+        LanguageCommand::Install {
+            language,
+            use_after,
+        } => {
+            registry
+                .install(language)
+                .map_err(|error| error.to_string())?;
+            println!("{} language support is installed.", language.native_name());
+            if use_after {
+                config.set_language(language.code());
+                config.save().map_err(|error| error.to_string())?;
+                println!("{} is now the interface language.", language.native_name());
+            }
+        }
+        LanguageCommand::Use(language) => {
+            if !registry.is_installed(language) {
+                return Err(format!(
+                    "{} is not installed; run 'termleaf language install {}'",
+                    language.native_name(),
+                    language.code()
+                ));
+            }
+            config.set_language(language.code());
+            config.save().map_err(|error| error.to_string())?;
+            println!("{} is now the interface language.", language.native_name());
+        }
+        LanguageCommand::Remove(language) => {
+            registry
+                .remove(language)
+                .map_err(|error| error.to_string())?;
+            if language == Language::Korean {
+                config.live_composition = false;
+            }
+            if config.language == language.code() {
+                config.set_language("en");
+                config.save().map_err(|error| error.to_string())?;
+            }
+            println!("{} language support was removed.", language.native_name());
+        }
+        LanguageCommand::Help => unreachable!(),
+    }
+    Ok(())
 }
 
 fn print_update_help() {
@@ -213,6 +416,64 @@ struct UiState {
     file_prompt: Option<FilePrompt>,
     help: Option<HelpOverlay>,
     sound_settings: Option<SoundSettings>,
+    language_settings: Option<LanguageSettings>,
+}
+
+fn handle_language_settings_key(
+    key: KeyEvent,
+    cfg: &mut Config,
+    languages: &mut LanguageRegistry,
+    settings: &mut Option<LanguageSettings>,
+) -> bool {
+    let quit = matches!(
+        key.code,
+        KeyCode::Char(c)
+            if key.modifiers.contains(KeyModifiers::CONTROL)
+                && matches!(c.to_ascii_lowercase(), 'q' | 'c')
+    );
+    if quit {
+        return true;
+    }
+
+    let Some(active) = settings.as_mut() else {
+        return false;
+    };
+    match key.code {
+        KeyCode::Up => active.select_previous(),
+        KeyCode::Down => active.select_next(),
+        KeyCode::Enter | KeyCode::Char(' ') => {
+            let language = active.selected_language();
+            match languages.install(language) {
+                Ok(()) => {
+                    cfg.set_language(language.code());
+                    active.status = Some(match language {
+                        Language::English => "English selected".to_string(),
+                        Language::Korean => "한국어를 사용할 수 있습니다".to_string(),
+                        Language::Japanese => "日本語を使用できます".to_string(),
+                    });
+                }
+                Err(error) => active.status = Some(error.to_string()),
+            }
+        }
+        KeyCode::Delete | KeyCode::Backspace => {
+            let language = active.selected_language();
+            match languages.remove(language) {
+                Ok(()) => {
+                    if language == Language::Korean {
+                        cfg.live_composition = false;
+                    }
+                    if cfg.language == language.code() {
+                        cfg.set_language("en");
+                    }
+                    active.status = Some("Language pack removed".to_string());
+                }
+                Err(error) => active.status = Some(error.to_string()),
+            }
+        }
+        KeyCode::Esc => *settings = None,
+        _ => {}
+    }
+    false
 }
 
 fn apply(
@@ -220,6 +481,7 @@ fn apply(
     cfg: &mut Config,
     theme: &mut Theme,
     sound: &SoundPlayer,
+    languages: &LanguageRegistry,
     ui: &mut UiState,
     action: Action,
 ) {
@@ -256,8 +518,14 @@ fn apply(
         Action::End => editor.move_end(),
         Action::ShowHelp => ui.help = Some(HelpOverlay::help(cfg.show_welcome)),
         Action::ToggleLiveComposition => {
-            editor.flush();
-            cfg.live_composition = !cfg.live_composition;
+            if languages.is_installed(Language::Korean) {
+                editor.flush();
+                cfg.live_composition = !cfg.live_composition;
+            } else {
+                let mut settings = LanguageSettings::new("ko");
+                settings.selected = 1;
+                ui.language_settings = Some(settings);
+            }
         }
         Action::ToggleFocus => cfg.focus_mode = !cfg.focus_mode,
         Action::ToggleBigFont => cfg.big_font = !cfg.big_font,
@@ -265,7 +533,9 @@ fn apply(
             cfg.theme = Theme::next(&cfg.theme).to_string();
             *theme = Theme::by_name(&cfg.theme);
         }
-        Action::ToggleLanguage => cfg.toggle_language(),
+        Action::ShowLanguageSettings => {
+            ui.language_settings = Some(LanguageSettings::new(&cfg.language));
+        }
         Action::ShowSoundSettings => ui.sound_settings = Some(SoundSettings::new()),
         Action::CycleSoundProfile => {
             cfg.cycle_sound_profile();
@@ -321,7 +591,6 @@ fn handle_sound_settings_key(
             toggle_sound_option(cfg, sound, active.selected, true);
         }
         KeyCode::Left => toggle_sound_option(cfg, sound, active.selected, false),
-        KeyCode::F(9) => cfg.toggle_language(),
         KeyCode::Enter | KeyCode::Esc | KeyCode::F(10) => *settings = None,
         _ => {}
     }
@@ -384,7 +653,6 @@ fn handle_help_key(key: KeyEvent, cfg: &mut Config, help: &mut Option<HelpOverla
                 overlay.toggle_startup_visibility();
             }
         }
-        KeyCode::F(9) => cfg.toggle_language(),
         KeyCode::Enter | KeyCode::Esc | KeyCode::F(1) => {
             if let Some(overlay) = help.take() {
                 cfg.show_welcome = !overlay.hide_on_startup;
@@ -718,17 +986,20 @@ mod tests {
     }
 
     #[test]
-    fn help_can_change_the_interface_language_before_closing() {
-        let mut cfg = Config::default();
-        let mut help = Some(HelpOverlay::help(cfg.show_welcome));
-
-        handle_help_key(
-            KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE),
-            &mut cfg,
-            &mut help,
+    fn startup_arguments_support_language_pack_commands() {
+        assert_eq!(
+            parse_startup_args(args(&["language", "install", "ja", "--use"])),
+            Ok(StartupRequest::Language(LanguageCommand::Install {
+                language: Language::Japanese,
+                use_after: true,
+            }))
         );
-
-        assert_eq!(cfg.language, "ko");
-        assert!(help.is_some());
+        assert_eq!(
+            parse_startup_args(args(&["language", "use", "ko"])),
+            Ok(StartupRequest::Language(LanguageCommand::Use(
+                Language::Korean
+            )))
+        );
+        assert!(parse_startup_args(args(&["language", "install", "fr"])).is_err());
     }
 }

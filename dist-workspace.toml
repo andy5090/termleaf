@@ -24,3 +24,12 @@ libasound2-dev = "*"
 [[dist.extra-artifacts]]
 artifacts = ["termleaf-installer.sh"]
 build = ["sh", "-n", "termleaf-installer.sh"]
+
+[[dist.extra-artifacts]]
+artifacts = [
+  "termleaf-language-ko.tar.xz",
+  "termleaf-language-ko.tar.xz.sha256",
+  "termleaf-language-ja.tar.xz",
+  "termleaf-language-ja.tar.xz.sha256",
+]
+build = ["sh", "tools/package_language_packs.sh"]

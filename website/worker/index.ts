@@ -2,6 +2,23 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 
+const upstreamInstaller =
+  "https://github.com/andy5090/termleaf/releases/latest/download/termleaf-installer.sh";
+
+function localizedInstaller(locale: "en" | "ko" | "ja"): Response {
+  const script = `#!/bin/sh
+set -eu
+curl --proto '=https' --tlsv1.2 -LsSf ${upstreamInstaller} | sh -s -- --language ${locale}
+`;
+  return new Response(script, {
+    headers: {
+      "content-type": "text/x-shellscript; charset=utf-8",
+      "cache-control": "public, max-age=300",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
@@ -32,6 +49,12 @@ const worker = {
     if (url.hostname === "www.termleaf.com") {
       url.hostname = "termleaf.com";
       return Response.redirect(url, 308);
+    }
+
+    if (request.method === "GET") {
+      if (url.pathname === "/install") return localizedInstaller("en");
+      if (url.pathname === "/install/ko") return localizedInstaller("ko");
+      if (url.pathname === "/install/ja") return localizedInstaller("ja");
     }
 
     if (url.pathname === "/_vinext/image") {

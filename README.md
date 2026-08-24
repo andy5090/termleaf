@@ -34,15 +34,15 @@ on the words, and save without leaving the terminal.
 - **Save & autosave** — plain-text documents (`.md` by default), with
   time-based autosave.
 - **Big pixel font zone** — a short cursor-side phrase is drawn with
-  [Galmuri9](https://quiple.dev/font/galmuri) pixels, including complete Hangul
-  and distinct Latin uppercase/lowercase glyphs.
+  [Galmuri9](https://quiple.dev/font/galmuri) pixels. English is built in;
+  optional Korean and Japanese packs add Hangul, kana, and CJK glyphs.
 - **Optional live Hangul composition** — press `F2` to make one enlarged
   character slot evolve in place as `ㅎ` → `하` → `한`, matching normal Hangul,
   including complex vowels (ㅘ, ㅢ …), double tails (ㄳ, ㄺ …), and the ghost
   rule (닭 + ㅏ → 달가).
 - **Themes** — `paper`, true-black `night`, phosphor-green `xt`, and `amber`.
-- **English or Korean UI** — guidance defaults to English and toggles in-app;
-  the last language, theme, sound, and display choices are restored on launch.
+- **Installable language support** — English is built in, while Korean and
+  Japanese UI, guidance, and enlarged-text glyphs are managed from `F9`.
 - **Built-in guidance** — the startup guide explains OS vs. Live Korean input;
   its “Don’t show again” checkbox is optional, and `F1` always reopens the full
   shortcut reference.
@@ -62,8 +62,15 @@ any missing ALSA runtime packages. This includes the PulseAudio plugin used by
 WSLg to route sound to Windows:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/andy5090/termleaf/releases/latest/download/termleaf-installer.sh | sh
+curl -fsSL https://termleaf.com/install | sh
+```
+
+The localized website installers add the matching language pack and select it
+for the first run:
+
+```bash
+curl -fsSL https://termleaf.com/install/ko | sh
+curl -fsSL https://termleaf.com/install/ja | sh
 ```
 
 Open a new terminal if the installer updates your `PATH`, then run:
@@ -141,7 +148,7 @@ plugin.
 | `F7` / `F8` | decrease / increase big-font size across five effective levels |
 | `Option+L` (macOS) / `Alt+L` (Windows/Linux) | alternate line-spacing shortcut |
 | `Option+P` (macOS) / `Alt+P` (Windows/Linux) | alternate page-width shortcut |
-| `F9` | toggle English / Korean interface guidance |
+| `F9` | open the language install/select/remove panel |
 | `F10` | open sound settings (typing / delete / return / key style) |
 | `F11` | cycle `classic` / `deep` / `soft` typewriter sound |
 | `Ctrl+O` | open a file (a missing path starts a new file there) |
@@ -170,7 +177,25 @@ The open prompt lists document files (`.txt`, `.md`, `.markdown`, `.rst`,
 `↑`/`↓` to select, `Tab` to complete the highlighted path, and `Enter` to open
 the document or enter a directory. Typing filters the list by filename.
 
-## Typing Korean
+## Language packs
+
+English and its Latin big-text glyphs are always available. Manage the
+data-only Korean and Japanese packs from `F9` or the command line:
+
+```bash
+termleaf language list
+termleaf language install ko --use
+termleaf language install ja --use
+termleaf language use en
+termleaf language remove ja
+```
+
+Language packs are stored under `${XDG_DATA_HOME:-~/.local/share}/termleaf/languages`.
+They contain a manifest, Galmuri glyph data, and its OFL license—never executable
+plugin code. Documents continue to accept Unicode input from the operating
+system regardless of the selected interface language.
+
+## Typing Korean and Japanese
 
 By default the status bar shows `IME:OS`; use the normal Linux/desktop 한/영
 shortcut and Termleaf accepts the committed Korean text from that IME. No Termleaf
@@ -182,6 +207,10 @@ the operating system's 한/영 switch. In this mode Termleaf maps raw English-la
 place as `ㅎ` → `하` → `한`, and `Backspace` disassembles that same cluster one
 step at a time. Set the OS keyboard to English while using `IME:LIVE`, since
 Termleaf needs the raw Latin key events to expose each intermediate step.
+
+Japanese uses the normal macOS or Linux IME. The Japanese pack provides the
+Japanese interface and enlarged hiragana, katakana, fullwidth, and available
+CJK glyphs; kana/kanji conversion remains securely handled by the OS.
 
 You can also open a document directly from the shell:
 
@@ -210,6 +239,7 @@ line_spacing = 2
 page_width = false
 # theme: paper, night, xt, or amber
 theme = paper
+# language: en, ko, or ja (the matching optional pack must be installed)
 language = en
 show_welcome = true
 autosave_secs = 30
