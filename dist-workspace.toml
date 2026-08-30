@@ -4,6 +4,9 @@ members = ["cargo:."]
 [dist]
 cargo-dist-version = "0.32.0"
 ci = "github"
+# The generated workflow is intentionally extended with the system packages
+# required to build the Japanese language pack's Akaza caches.
+allow-dirty = ["ci"]
 pr-run-mode = "skip"
 installers = []
 targets = [
