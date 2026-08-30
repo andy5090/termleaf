@@ -42,7 +42,7 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /<title>Termleaf — Write\. Nothing else\.<\/title>/i);
   assert.match(html, /Write\./);
   assert.match(html, /Nothing else\./);
-  assert.match(html, /v0\.4\.0/);
+  assert.match(html, /v0\.5\.0/);
   assert.match(html, /https:\/\/termleaf\.com\/install/);
   assert.match(html, /Real-recorded typewriter sound/);
   assert.match(html, /One command gets you set up/);
