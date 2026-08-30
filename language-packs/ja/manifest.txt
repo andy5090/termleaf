@@ -4,4 +4,4 @@ name = 日本語
 english_name = Japanese
 interface = true
 big_glyphs = true
-input = os-ime
+input = os-ime,termleaf-akaza

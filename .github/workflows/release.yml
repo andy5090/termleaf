@@ -188,6 +188,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      - name: Install language-pack build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libasound2-dev xz-utils
       - name: Install cached dist
         uses: actions/download-artifact@v8
         with:

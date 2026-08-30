@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use audio::SoundPlayer;
-use config::Config;
+use config::{Config, LiveInputMode};
 use editor::Editor;
 use input::{map_key, Action};
 use language::{Language, LanguageRegistry};
@@ -52,6 +52,14 @@ fn main() -> io::Result<()> {
         Ok(StartupRequest::Language(command)) => {
             if let Err(error) = run_language_command(command) {
                 eprintln!("termleaf language: {error}");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+        Ok(StartupRequest::BuildJapaneseCache(model)) => {
+            let mut editor = Editor::new();
+            if let Err(error) = editor.load_japanese_model(&model) {
+                eprintln!("termleaf Japanese cache builder: {error}");
                 std::process::exit(1);
             }
             return Ok(());
@@ -90,6 +98,9 @@ fn main() -> io::Result<()> {
         Some(path) => Editor::open(path)?,
         None => Editor::new(),
     };
+    if cfg.live_japanese {
+        load_japanese_conversion(&mut editor, &languages);
+    }
 
     // The guard restores the terminal on drop (including on panic/error).
     let _guard = TerminalGuard::enter()?;
@@ -102,6 +113,7 @@ fn main() -> io::Result<()> {
         help: cfg.show_welcome.then(HelpOverlay::welcome),
         sound_settings: None,
         language_settings: None,
+        pending_language_install: None,
     };
     let mut needs_redraw = true;
 
@@ -121,6 +133,20 @@ fn main() -> io::Result<()> {
                 },
             )?;
             needs_redraw = false;
+        }
+
+        // Installation is deliberately deferred until after the status panel
+        // has been redrawn, so a large language pack never looks like an
+        // ignored Enter key while curl and extraction are running.
+        if let Some(language) = ui.pending_language_install.take() {
+            finish_language_install(
+                language,
+                &mut cfg,
+                &mut languages,
+                &mut ui.language_settings,
+            );
+            needs_redraw = true;
+            continue;
         }
 
         // Wake at least twice a second for autosave, but do not repaint an
@@ -146,6 +172,7 @@ fn main() -> io::Result<()> {
                             &mut cfg,
                             &mut languages,
                             &mut ui.language_settings,
+                            &mut ui.pending_language_install,
                         ) {
                             break;
                         }
@@ -209,6 +236,7 @@ enum StartupRequest {
     Update { force: bool },
     UpdateHelp,
     Language(LanguageCommand),
+    BuildJapaneseCache(PathBuf),
     Version,
 }
 
@@ -262,6 +290,9 @@ fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
         }
         [command, ..] if command == "language" => {
             Err("invalid language command; try 'termleaf language --help'".to_string())
+        }
+        [command, model] if command == "__build-japanese-cache" => {
+            Ok(StartupRequest::BuildJapaneseCache(PathBuf::from(model)))
         }
         [separator, path] if separator == "--" => {
             Ok(StartupRequest::Edit(Some(PathBuf::from(path))))
@@ -426,6 +457,7 @@ struct UiState {
     help: Option<HelpOverlay>,
     sound_settings: Option<SoundSettings>,
     language_settings: Option<LanguageSettings>,
+    pending_language_install: Option<Language>,
 }
 
 fn handle_language_settings_key(
@@ -433,6 +465,7 @@ fn handle_language_settings_key(
     cfg: &mut Config,
     languages: &mut LanguageRegistry,
     settings: &mut Option<LanguageSettings>,
+    pending_install: &mut Option<Language>,
 ) -> bool {
     let quit = matches!(
         key.code,
@@ -452,16 +485,14 @@ fn handle_language_settings_key(
         KeyCode::Down => active.select_next(),
         KeyCode::Enter | KeyCode::Char(' ') => {
             let language = active.selected_language();
-            match languages.install(language) {
-                Ok(()) => {
-                    cfg.set_language(language.code());
-                    active.status = Some(match language {
-                        Language::English => "English selected".to_string(),
-                        Language::Korean => "한국어를 사용할 수 있습니다".to_string(),
-                        Language::Japanese => "日本語を使用できます".to_string(),
-                    });
-                }
-                Err(error) => active.status = Some(error.to_string()),
+            if language.is_builtin()
+                || (languages.is_installed(language) && !languages.needs_update(language))
+            {
+                cfg.set_language(language.code());
+                active.status = Some(language_ready_message(language));
+            } else {
+                active.status = Some(language_installing_message(cfg, language));
+                *pending_install = Some(language);
             }
         }
         KeyCode::Delete | KeyCode::Backspace => {
@@ -488,6 +519,44 @@ fn handle_language_settings_key(
     false
 }
 
+fn finish_language_install(
+    language: Language,
+    cfg: &mut Config,
+    languages: &mut LanguageRegistry,
+    settings: &mut Option<LanguageSettings>,
+) {
+    let Some(active) = settings.as_mut() else {
+        return;
+    };
+    match languages.install(language) {
+        Ok(()) => {
+            cfg.set_language(language.code());
+            active.status = Some(language_ready_message(language));
+        }
+        Err(error) => active.status = Some(error.to_string()),
+    }
+}
+
+fn language_ready_message(language: Language) -> String {
+    match language {
+        Language::English => "English selected".to_string(),
+        Language::Korean => "한국어를 사용할 수 있습니다".to_string(),
+        Language::Japanese => "日本語を使用できます".to_string(),
+    }
+}
+
+fn language_installing_message(cfg: &Config, language: Language) -> String {
+    let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
+    match (locale, language) {
+        (Language::Korean, Language::Japanese) => "일본어 팩 업데이트 중 (약 150MB)…".to_string(),
+        (Language::Japanese, Language::Japanese) => "日本語パックを更新中（約150 MB）…".to_string(),
+        (Language::English, Language::Japanese) => "Updating Japanese pack (~150 MB)…".to_string(),
+        (Language::Korean, _) => "언어 팩 설치 중…".to_string(),
+        (Language::Japanese, _) => "言語パックをインストール中…".to_string(),
+        (Language::English, _) => "Installing language pack…".to_string(),
+    }
+}
+
 fn apply(
     editor: &mut Editor,
     cfg: &mut Config,
@@ -510,6 +579,20 @@ fn apply(
             editor.input_romaji(character, cfg.japanese_katakana);
             key_clack(sound, cfg);
         }
+        Action::JapaneseConvertNext => {
+            if editor.japanese_convert_next() {
+                key_clack(sound, cfg);
+            } else {
+                editor.insert_char(' ');
+                key_clack(sound, cfg);
+            }
+        }
+        Action::JapaneseConvertPrev => {
+            editor.japanese_convert_prev();
+        }
+        Action::CancelComposition => {
+            editor.cancel_composition();
+        }
         Action::Backspace => {
             if editor.backspace() && cfg.sound && cfg.backspace_sound {
                 sound.play_backspace();
@@ -526,39 +609,23 @@ fn apply(
                 sound.play_return();
             }
         }
-        Action::Left => editor.move_left(),
-        Action::Right => editor.move_right(),
+        Action::Left => {
+            if !editor.japanese_move_segment_left() {
+                editor.move_left();
+            }
+        }
+        Action::Right => {
+            if !editor.japanese_move_segment_right() {
+                editor.move_right();
+            }
+        }
         Action::Up => editor.move_up(),
         Action::Down => editor.move_down(),
         Action::Home => editor.move_home(),
         Action::End => editor.move_end(),
         Action::ShowHelp => ui.help = Some(HelpOverlay::help(cfg.show_welcome)),
-        Action::ToggleLiveComposition => {
-            if languages.is_installed(Language::Korean) {
-                editor.flush();
-                cfg.live_composition = !cfg.live_composition;
-                if cfg.live_composition {
-                    cfg.live_japanese = false;
-                }
-            } else {
-                let mut settings = LanguageSettings::new("ko");
-                settings.selected = 1;
-                ui.language_settings = Some(settings);
-            }
-        }
-        Action::ToggleLiveJapanese => {
-            if languages.is_installed(Language::Japanese) {
-                editor.flush();
-                cfg.live_japanese = !cfg.live_japanese;
-                if cfg.live_japanese {
-                    cfg.live_composition = false;
-                }
-            } else {
-                let mut settings = LanguageSettings::new("ja");
-                settings.selected = 2;
-                ui.language_settings = Some(settings);
-            }
-        }
+        Action::CycleLiveInput => cycle_live_input(editor, cfg, languages, ui, false),
+        Action::CycleLiveInputReverse => cycle_live_input(editor, cfg, languages, ui, true),
         Action::ToggleJapaneseScript => {
             if cfg.live_japanese {
                 editor.flush();
@@ -597,6 +664,55 @@ fn apply(
             ui.file_prompt = Some(FilePrompt::save_as(editor.doc.path.as_deref()));
         }
         Action::Quit | Action::Ignore => {}
+    }
+}
+
+fn load_japanese_conversion(editor: &mut Editor, languages: &LanguageRegistry) {
+    if let Some(path) = languages.pack_asset(Language::Japanese, "akaza-default-model") {
+        if editor.load_japanese_model(&path).is_err() {
+            editor.clear_japanese_model();
+        }
+    } else {
+        editor.clear_japanese_model();
+    }
+}
+
+fn cycle_live_input(
+    editor: &mut Editor,
+    cfg: &mut Config,
+    languages: &LanguageRegistry,
+    ui: &mut UiState,
+    reverse: bool,
+) {
+    let available = Language::ALL
+        .into_iter()
+        .filter(|language| languages.supports_live_input(*language))
+        .filter_map(live_input_mode_for_language)
+        .collect::<Vec<_>>();
+    if available.is_empty() {
+        let language = if languages.needs_update(Language::Japanese) || reverse {
+            "ja"
+        } else {
+            "ko"
+        };
+        let mut settings = LanguageSettings::new(language);
+        settings.selected = if reverse { 2 } else { 1 };
+        ui.language_settings = Some(settings);
+        return;
+    }
+
+    editor.flush();
+    editor.clear_japanese_model();
+    if cfg.cycle_live_input(&available, reverse) == LiveInputMode::Japanese {
+        load_japanese_conversion(editor, languages);
+    }
+}
+
+fn live_input_mode_for_language(language: Language) -> Option<LiveInputMode> {
+    match language {
+        Language::English => None,
+        Language::Korean => Some(LiveInputMode::Korean),
+        Language::Japanese => Some(LiveInputMode::Japanese),
     }
 }
 
@@ -893,6 +1009,34 @@ mod tests {
         assert!(parse_startup_args(args(&["--unknown"])).is_err());
         assert!(parse_startup_args(args(&["one.md", "two.md"])).is_err());
         assert!(parse_startup_args(args(&["update", "--unknown"])).is_err());
+    }
+
+    #[test]
+    fn language_install_is_deferred_until_after_the_progress_redraw() {
+        let root = unique_path("deferred-language-install");
+        let mut cfg = Config {
+            language: "ko".to_string(),
+            ..Config::default()
+        };
+        let mut languages = LanguageRegistry::load_from(root.clone());
+        let mut settings = Some(LanguageSettings::new("ja"));
+        let mut pending = None;
+
+        assert!(!handle_language_settings_key(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            &mut cfg,
+            &mut languages,
+            &mut settings,
+            &mut pending,
+        ));
+
+        assert_eq!(pending, Some(Language::Japanese));
+        assert!(settings
+            .as_ref()
+            .and_then(|active| active.status.as_deref())
+            .is_some_and(|status| status.contains("150MB")));
+        assert!(!languages.is_installed(Language::Japanese));
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

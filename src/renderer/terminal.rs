@@ -148,6 +148,7 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
     if let Some(row) = frame.layout.shortcut_row {
         draw_shortcuts(
             out,
+            frame.editor,
             frame.prompt,
             frame.cfg,
             frame.theme,
@@ -271,20 +272,24 @@ fn draw_language_settings(
             locale,
             language.is_builtin(),
             languages.is_installed(language),
+            languages.needs_update(language),
             active,
         ) {
-            (Language::Korean, _, _, true) => "사용 중",
-            (Language::Japanese, _, _, true) => "使用中",
-            (_, _, _, true) => "Active",
-            (Language::Korean, true, _, _) => "기본 제공",
-            (Language::Japanese, true, _, _) => "内蔵",
-            (_, true, _, _) => "Built in",
-            (Language::Korean, _, true, _) => "설치됨",
-            (Language::Japanese, _, true, _) => "インストール済み",
-            (_, _, true, _) => "Installed",
-            (Language::Korean, _, false, _) => "설치 가능",
-            (Language::Japanese, _, false, _) => "利用可能",
-            (_, _, false, _) => "Available",
+            (Language::Korean, _, _, true, _) => "업데이트 필요",
+            (Language::Japanese, _, _, true, _) => "更新が必要",
+            (_, _, _, true, _) => "Update needed",
+            (Language::Korean, _, _, _, true) => "사용 중",
+            (Language::Japanese, _, _, _, true) => "使用中",
+            (_, _, _, _, true) => "Active",
+            (Language::Korean, true, _, _, _) => "기본 제공",
+            (Language::Japanese, true, _, _, _) => "内蔵",
+            (_, true, _, _, _) => "Built in",
+            (Language::Korean, _, true, _, _) => "설치됨",
+            (Language::Japanese, _, true, _, _) => "インストール済み",
+            (_, _, true, _, _) => "Installed",
+            (Language::Korean, _, false, _, _) => "설치 가능",
+            (Language::Japanese, _, false, _, _) => "利用可能",
+            (_, _, false, _, _) => "Available",
         };
         let line = format!("{marker}  {:<12}  {state}", language.native_name());
         draw_help_line(
@@ -539,8 +544,8 @@ fn draw_help(
             "표시 언어: F9에서 언어팩 설치·선택 (입력 언어와 별개)",
             input_switch_hint(locale),
             "OS 입력 소스가 먼저 설치되어 있어야 합니다.",
-            "F2 직접 한글 — OS 입력을 영문으로 두면 ㅎ → 하 → 한 표시",
-            "Shift+F2 직접 일본어 — 로마자→가나 · Ctrl+K 히라가나/가타카나",
+            "F2 입력 순환 — OS → 한글 → 일본어 · Shift+F2 역순",
+            "한글은 OS 입력을 영문으로 · 일본어는 Space 변환 · Ctrl+K 히라가나/가타카나",
             "",
             "파일: Ctrl+O 열기 · Ctrl+S 저장 · F12 다른 이름 (.md 기본)",
             "화면: F3 집중 · F4 큰글자 · F6 테마 · F7/F8 크기 1–5",
@@ -553,7 +558,8 @@ fn draw_help(
             "表示言語: F9でインストール・選択（入力言語とは別）",
             input_switch_hint(locale),
             "OS側に入力ソースを先に追加してください。",
-            "F2 Live Korean · Shift+F2 ローマ字→かな · Ctrl+K あ/ア",
+            "F2 入力を順送り（OS→韓国語→日本語）· Shift+F2 逆送り",
+            "韓国語はOS入力を英字に · 日本語はSpace変換 · Ctrl+K あ/ア",
             "",
             "ファイル: Ctrl+O 開く · Ctrl+S 保存 · F12 名前を付けて保存",
             "表示: F3 集中 · F4 拡大文字 · F6 テーマ · F7/F8 サイズ",
@@ -566,8 +572,8 @@ fn draw_help(
             "Display: F9 installs/selects UI language; typing is separate",
             input_switch_hint(locale),
             "Add the input source in your operating system first.",
-            "F2 Live Korean — keep OS input English to see ㅎ → 하 → 한",
-            "Shift+F2 Live Japanese — romaji→kana · Ctrl+K Hiragana/Katakana",
+            "F2 cycles input: OS → Korean → Japanese · Shift+F2 reverses",
+            "Keep OS input English for Korean · Japanese: Space convert · Ctrl+K Hiragana/Katakana",
             "",
             "Files: Ctrl+O Open · Ctrl+S Save · F12 Save as (.md default)",
             "View: F3 Focus · F4 Big text · F6 Theme · F7/F8 Size 1–5",
@@ -1027,6 +1033,8 @@ fn draw_status(
     let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
     let mode = if cfg.live_composition {
         "IME:KO"
+    } else if cfg.live_japanese && editor.japanese_is_converting() {
+        "IME:JA変"
     } else if cfg.live_japanese && cfg.japanese_katakana {
         "IME:JAア"
     } else if cfg.live_japanese {
@@ -1069,9 +1077,11 @@ fn draw_status(
             Language::English => "untitled".to_string(),
         });
     let stage = editor.composer().stage();
+    let conversion = editor.japanese_candidate_position();
+    let segment = editor.japanese_segment_position();
     let left = match locale {
         Language::Korean => format!(
-            " {mode} │ {sound} │ {dirty}{name} │ {}단어 {}자 │ 크기 {}/{} │ 줄 {}/{} │ 페이지:{} │ 조합 {stage}/3 ",
+            " {mode} │ {sound} │ {dirty}{name} │ {}단어 {}자 │ 크기 {}/{} │ 줄 {}/{} │ 페이지:{}{} │ 조합 {stage}/3 ",
             editor.word_count(),
             editor.char_count(),
             cfg.font_size,
@@ -1079,9 +1089,10 @@ fn draw_status(
             cfg.line_spacing,
             MAX_LINE_SPACING,
             if cfg.page_width { "켬" } else { "끔" },
+            conversion.zip(segment).map_or_else(String::new, |((candidate, candidates), (clause, clauses))| format!(" │ 문절 {clause}/{clauses} 후보 {candidate}/{candidates}")),
         ),
         Language::Japanese => format!(
-            " {mode} │ {sound} │ {dirty}{name} │ {}語 {}文字 │ サイズ {}/{} │ 行間 {}/{} │ ページ:{} ",
+            " {mode} │ {sound} │ {dirty}{name} │ {}語 {}文字 │ サイズ {}/{} │ 行間 {}/{} │ ページ:{}{} ",
             editor.word_count(),
             editor.char_count(),
             cfg.font_size,
@@ -1089,9 +1100,10 @@ fn draw_status(
             cfg.line_spacing,
             MAX_LINE_SPACING,
             if cfg.page_width { "オン" } else { "オフ" },
+            conversion.zip(segment).map_or_else(String::new, |((candidate, candidates), (clause, clauses))| format!(" │ 文節 {clause}/{clauses} 候補 {candidate}/{candidates}")),
         ),
         Language::English => format!(
-            " {mode} │ {sound} │ {dirty}{name} │ {} words {} chars │ size {}/{} │ line {}/{} │ page:{} │ compose {stage}/3 ",
+            " {mode} │ {sound} │ {dirty}{name} │ {} words {} chars │ size {}/{} │ line {}/{} │ page:{}{} │ compose {stage}/3 ",
             editor.word_count(),
             editor.char_count(),
             cfg.font_size,
@@ -1099,6 +1111,7 @@ fn draw_status(
             cfg.line_spacing,
             MAX_LINE_SPACING,
             if cfg.page_width { "on" } else { "off" },
+            conversion.zip(segment).map_or_else(String::new, |((candidate, candidates), (clause, clauses))| format!(" │ segment {clause}/{clauses} candidate {candidate}/{candidates}")),
         ),
     };
 
@@ -1117,6 +1130,7 @@ fn draw_status(
 
 fn draw_shortcuts(
     out: &mut Stdout,
+    editor: &Editor,
     prompt: Option<&FilePrompt>,
     cfg: &Config,
     theme: &Theme,
@@ -1135,6 +1149,9 @@ fn draw_shortcuts(
     )?;
 
     if prompt.is_none() {
+        if editor.japanese_is_converting() {
+            return draw_shortcut_guide(out, japanese_conversion_guide(locale, cols), theme, cols);
+        }
         return draw_shortcut_guide(out, shortcut_guide(locale, cols), theme, cols);
     }
 
@@ -1245,7 +1262,7 @@ const CTRL_QUIT_JA: &[(&str, &str)] = &[("Q", "終了")];
 
 const F_WIDE_EN: &[(&str, &str)] = &[
     ("F1", "Help"),
-    ("F2", "Korean"),
+    ("F2", "Input"),
     ("F3", "Focus"),
     ("F4", "Big"),
     ("F5", "Page"),
@@ -1257,7 +1274,7 @@ const F_WIDE_EN: &[(&str, &str)] = &[
 ];
 const F_WIDE_KO: &[(&str, &str)] = &[
     ("F1", "도움"),
-    ("F2", "한글"),
+    ("F2", "입력"),
     ("F3", "집중"),
     ("F4", "큰글자"),
     ("F5", "종이폭"),
@@ -1269,7 +1286,7 @@ const F_WIDE_KO: &[(&str, &str)] = &[
 ];
 const F_WIDE_JA: &[(&str, &str)] = &[
     ("F1", "ヘルプ"),
-    ("F2", "韓国語"),
+    ("F2", "入力"),
     ("F3", "集中"),
     ("F4", "拡大"),
     ("F5", "ページ"),
@@ -1315,12 +1332,36 @@ const F_NARROW_JA: &[(&str, &str)] = &[("F5", "幅"), ("F10", "音")];
 const F_TINY_EN: &[(&str, &str)] = F_NARROW_EN;
 const F_TINY_KO: &[(&str, &str)] = F_NARROW_KO;
 const F_TINY_JA: &[(&str, &str)] = F_NARROW_JA;
-const INPUT_SPACING_EN: &[(&str, &str)] = &[("F2", "Japanese"), ("F5", "Spacing")];
-const INPUT_SPACING_KO: &[(&str, &str)] = &[("F2", "일본어"), ("F5", "줄간격")];
-const INPUT_SPACING_JA: &[(&str, &str)] = &[("F2", "日本語"), ("F5", "行間")];
+const INPUT_SPACING_EN: &[(&str, &str)] = &[("F2", "Reverse"), ("F5", "Spacing")];
+const INPUT_SPACING_KO: &[(&str, &str)] = &[("F2", "역순"), ("F5", "줄간격")];
+const INPUT_SPACING_JA: &[(&str, &str)] = &[("F2", "逆順"), ("F5", "行間")];
 const SPACING_EN: &[(&str, &str)] = &[("F5", "Spacing")];
 const SPACING_KO: &[(&str, &str)] = &[("F5", "줄간격")];
 const SPACING_JA: &[(&str, &str)] = &[("F5", "行間")];
+const JA_CONVERT_EN: &[(&str, &str)] = &[
+    ("Space/Tab", "Next"),
+    ("Shift+Tab", "Prev"),
+    ("←/→", "Segment"),
+    ("Enter", "Confirm"),
+    ("Esc", "Kana"),
+];
+const JA_CONVERT_KO: &[(&str, &str)] = &[
+    ("Space/Tab", "다음"),
+    ("Shift+Tab", "이전"),
+    ("←/→", "문절"),
+    ("Enter", "확정"),
+    ("Esc", "가나"),
+];
+const JA_CONVERT_JA: &[(&str, &str)] = &[
+    ("Space/Tab", "次"),
+    ("Shift+Tab", "前"),
+    ("←/→", "文節"),
+    ("Enter", "確定"),
+    ("Esc", "かな"),
+];
+const JA_CONVERT_CTRL_EN: &[(&str, &str)] = &[("K", "あ/ア"), ("Q", "Quit")];
+const JA_CONVERT_CTRL_KO: &[(&str, &str)] = &[("K", "히라/가타"), ("Q", "종료")];
+const JA_CONVERT_CTRL_JA: &[(&str, &str)] = &[("K", "あ/ア"), ("Q", "終了")];
 
 const WIDE_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_EN),
@@ -1337,6 +1378,29 @@ const WIDE_JA: &[ShortcutGroup] = &[
     shortcut_group(None, F_WIDE_JA),
     shortcut_group(Some("Shift"), INPUT_SPACING_JA),
 ];
+const JA_CONVERT_WIDE_EN: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), JA_CONVERT_CTRL_EN),
+    shortcut_group(None, JA_CONVERT_EN),
+];
+const JA_CONVERT_WIDE_KO: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), JA_CONVERT_CTRL_KO),
+    shortcut_group(None, JA_CONVERT_KO),
+];
+const JA_CONVERT_WIDE_JA: &[ShortcutGroup] = &[
+    shortcut_group(Some("Ctrl"), JA_CONVERT_CTRL_JA),
+    shortcut_group(None, JA_CONVERT_JA),
+];
+const JA_CONVERT_COMPACT_EN_BINDINGS: &[(&str, &str)] = &[("Enter", "Confirm"), ("Esc", "Kana")];
+const JA_CONVERT_COMPACT_KO_BINDINGS: &[(&str, &str)] = &[("Enter", "확정"), ("Esc", "가나")];
+const JA_CONVERT_COMPACT_JA_BINDINGS: &[(&str, &str)] = &[("Enter", "確定"), ("Esc", "かな")];
+const JA_CONVERT_TINY_BINDINGS: &[(&str, &str)] = &[("Enter", "OK")];
+const JA_CONVERT_COMPACT_EN: &[ShortcutGroup] =
+    &[shortcut_group(None, JA_CONVERT_COMPACT_EN_BINDINGS)];
+const JA_CONVERT_COMPACT_KO: &[ShortcutGroup] =
+    &[shortcut_group(None, JA_CONVERT_COMPACT_KO_BINDINGS)];
+const JA_CONVERT_COMPACT_JA: &[ShortcutGroup] =
+    &[shortcut_group(None, JA_CONVERT_COMPACT_JA_BINDINGS)];
+const JA_CONVERT_TINY: &[ShortcutGroup] = &[shortcut_group(None, JA_CONVERT_TINY_BINDINGS)];
 const STANDARD_EN: &[ShortcutGroup] = &[
     shortcut_group(Some("Ctrl"), CTRL_EN),
     shortcut_group(None, F_STANDARD_EN),
@@ -1395,6 +1459,34 @@ fn shortcut_guide(language: Language, cols: u16) -> ShortcutGuide {
         .map(|groups| ShortcutGuide { groups })
         .find(|guide| guide.width() <= cols)
         .unwrap_or(ShortcutGuide { groups: choices[4] })
+}
+
+fn japanese_conversion_guide(language: Language, cols: u16) -> ShortcutGuide {
+    let full = ShortcutGuide {
+        groups: match language {
+            Language::English => JA_CONVERT_WIDE_EN,
+            Language::Korean => JA_CONVERT_WIDE_KO,
+            Language::Japanese => JA_CONVERT_WIDE_JA,
+        },
+    };
+    if full.width() <= cols {
+        return full;
+    }
+
+    let compact = ShortcutGuide {
+        groups: match language {
+            Language::English => JA_CONVERT_COMPACT_EN,
+            Language::Korean => JA_CONVERT_COMPACT_KO,
+            Language::Japanese => JA_CONVERT_COMPACT_JA,
+        },
+    };
+    if compact.width() <= cols {
+        compact
+    } else {
+        ShortcutGuide {
+            groups: JA_CONVERT_TINY,
+        }
+    }
 }
 
 fn draw_shortcut_guide(

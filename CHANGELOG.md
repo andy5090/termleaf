@@ -9,15 +9,27 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Added `Shift+F2` Live Japanese romaji-to-kana input with a `Ctrl+K`
-  Hiragana/Katakana toggle while preserving the existing `F2` Live Korean mode.
+- Added `Shift+F2` Live Japanese sentence conversion with offline
+  romaji-to-kana input, `Space`/`Tab` candidate cycling, `Enter` confirmation,
+  `Esc` cancellation, and a `Ctrl+K` Hiragana/Katakana view toggle.
 
 ### Changed
 
 - Clarified the difference between display language and operating-system input
   language in the in-app help and language manager.
+- Extended the Japanese language-pack release flow so it bundles Akaza's
+  checksum-verified contextual conversion model and its upstream notices.
+- Changed `F2` to cycle forward through installed in-app input languages and
+  `Shift+F2` to cycle in reverse, skipping languages that are not installed.
 - Replaced the website's native language select with an accessible branded
   dropdown supporting keyboard navigation and outside-click dismissal.
+
+### Fixed
+
+- Accepted the legacy `F14` sequence emitted by some macOS terminals for the
+  reverse `Shift+F2` input cycle.
+- Detects Japanese packs that predate the Akaza model, excludes their unusable
+  Live Japanese mode from the input cycle, and allows `F9` to update the pack.
 
 ## [0.4.0] - 2026-08-25
 

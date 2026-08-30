@@ -34,3 +34,26 @@ appreciation of the author's work.
 - Library: <https://bigsoundbank.com>
 - License: <https://creativecommons.org/publicdomain/zero/1.0/>
 - Library license terms: <https://bigsoundbank.com/licenses.html>
+
+## Akaza Japanese conversion engine and model
+
+Termleaf uses the Akaza kana-to-kanji engine pinned to v2026.602.0. Akaza is
+Copyright © 2023 Tokuhiro Matsuno and is distributed under the MIT License.
+
+Akaza uses `rsmarisa` 0.4.2, Copyright © 2024 Tokuhiro Matsuno, under the
+BSD 2-Clause License. Termleaf vendors its Rust source with a bounds-safe
+prefix-search fix; the license is retained at `vendor/rsmarisa/LICENSE`.
+
+The optional Japanese language pack includes Akaza's default unigram, bigram,
+skip-bigram, and system-dictionary data. The model is built from open language
+resources including Japanese Wikipedia, Aozora Bunko public-domain works, and
+CC-100 Japanese/Common Crawl. Because the generated model contains statistics
+derived from Japanese Wikipedia, its redistribution is subject to CC BY-SA
+4.0 and attribution to Wikimedia Foundation and Japanese Wikipedia
+contributors.
+
+- Project and model source: <https://github.com/akaza-im/akaza/tree/v2026.602.0>
+- Model release: <https://github.com/akaza-im/akaza/releases/tag/v2026.602.0>
+- CC BY-SA 4.0: <https://creativecommons.org/licenses/by-sa/4.0/>
+- Pack-local notices: `language-packs/ja/LICENSE-AKAZA.txt` and
+  `language-packs/ja/NOTICE-AKAZA-MODEL.txt`

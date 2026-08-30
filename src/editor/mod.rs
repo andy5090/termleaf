@@ -77,6 +77,34 @@ impl Editor {
         &self.composer
     }
 
+    pub fn japanese_is_converting(&self) -> bool {
+        self.japanese_composer.is_converting()
+    }
+
+    pub fn japanese_candidate_position(&self) -> Option<(usize, usize)> {
+        self.japanese_composer.candidate_position()
+    }
+
+    pub fn load_japanese_model(&mut self, path: &Path) -> Result<(), String> {
+        self.japanese_composer.load_model(path)
+    }
+
+    pub fn clear_japanese_model(&mut self) {
+        self.japanese_composer.clear_model();
+    }
+
+    pub fn japanese_segment_position(&self) -> Option<(usize, usize)> {
+        self.japanese_composer.segment_position()
+    }
+
+    pub fn japanese_move_segment_left(&mut self) -> bool {
+        self.japanese_composer.move_segment_left()
+    }
+
+    pub fn japanese_move_segment_right(&mut self) -> bool {
+        self.japanese_composer.move_segment_right()
+    }
+
     /// A short slice of the current line for the big-pixel focus zone.
     ///
     /// Pending Hangul composition is inserted at the cursor as one evolving
@@ -135,6 +163,35 @@ impl Editor {
             self.insert_committed(character);
         }
         self.doc.dirty = true;
+    }
+
+    pub fn japanese_convert_next(&mut self) -> bool {
+        let changed = self.japanese_composer.convert_next();
+        if changed {
+            self.doc.dirty = true;
+        }
+        changed
+    }
+
+    pub fn japanese_convert_prev(&mut self) -> bool {
+        let changed = self.japanese_composer.convert_prev();
+        if changed {
+            self.doc.dirty = true;
+        }
+        changed
+    }
+
+    pub fn cancel_composition(&mut self) -> bool {
+        if !self.composer.is_empty() {
+            self.composer = KoreanComposer::new();
+            self.doc.dirty = true;
+            return true;
+        }
+        if self.japanese_composer.cancel() {
+            self.doc.dirty = true;
+            return true;
+        }
+        false
     }
 
     /// Finalize pending composition into the buffer.
@@ -198,6 +255,10 @@ impl Editor {
     }
 
     pub fn newline(&mut self) {
+        if self.japanese_composer.has_pending() {
+            self.flush();
+            return;
+        }
         self.flush();
         let Cursor { row, col } = self.doc.cursor;
         let tail = self.buffer.lines[row].split_off(col);
@@ -406,8 +467,34 @@ mod tests {
         assert_eq!(editor.focus_text(4), ['k']);
 
         editor.input_romaji('a', false);
+        assert_eq!(editor.buffer.to_text(), "");
+        assert_eq!(editor.composing(), "か");
+        editor.flush();
         assert_eq!(editor.buffer.to_text(), "か");
+    }
+
+    #[test]
+    fn live_japanese_sentence_stays_in_the_composing_zone_until_confirmed() {
+        let mut editor = Editor::new();
+        for character in "nihongo".chars() {
+            editor.input_romaji(character, false);
+        }
+        assert_eq!(editor.composing(), "にほんご");
+        assert_eq!(editor.buffer.to_text(), "");
+
+        editor.flush();
+        assert_eq!(editor.buffer.to_text(), "にほんご");
+    }
+
+    #[test]
+    fn live_japanese_cancel_discards_pending_text() {
+        let mut editor = Editor::new();
+        for character in "nihongo".chars() {
+            editor.input_romaji(character, false);
+        }
+        assert!(editor.cancel_composition());
         assert!(editor.composing().is_empty());
+        assert_eq!(editor.buffer.to_text(), "");
     }
 
     #[test]

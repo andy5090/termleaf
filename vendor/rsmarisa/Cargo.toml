@@ -1,0 +1,24 @@
+[package]
+edition = "2021"
+rust-version = "1.70"
+name = "rsmarisa"
+version = "0.4.2"
+authors = ["rust-marisa contributors"]
+description = "Pure Rust port of marisa-trie: a static and space-efficient trie data structure"
+homepage = "https://github.com/tokuhirom/rsmarisa"
+documentation = "https://docs.rs/rsmarisa"
+readme = "README.md"
+license = "BSD-2-Clause"
+repository = "https://github.com/tokuhirom/rsmarisa"
+
+[features]
+default = ["mmap"]
+mmap = ["dep:memmap2"]
+
+[lib]
+name = "rsmarisa"
+path = "src/lib.rs"
+
+[dependencies.memmap2]
+version = "0.9"
+optional = true

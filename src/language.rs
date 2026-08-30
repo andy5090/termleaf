@@ -101,6 +101,33 @@ impl LanguageRegistry {
         language.is_builtin() || self.packs.contains_key(&language)
     }
 
+    pub fn supports_live_input(&self, language: Language) -> bool {
+        match language {
+            Language::English => false,
+            Language::Korean => self.is_installed(language),
+            Language::Japanese => {
+                self.is_installed(language)
+                    && [
+                        "unigram.model",
+                        "bigram.model",
+                        "skip_bigram.model",
+                        "SKK-JISYO.akaza",
+                    ]
+                    .iter()
+                    .all(|name| {
+                        self.pack_asset(language, &format!("akaza-default-model/{name}"))
+                            .is_some_and(|path| path.is_file())
+                    })
+            }
+        }
+    }
+
+    pub fn needs_update(&self, language: Language) -> bool {
+        self.is_installed(language)
+            && matches!(language, Language::Japanese)
+            && !self.supports_live_input(language)
+    }
+
     pub fn glyph(&self, character: char) -> Option<&PackedGlyph> {
         self.packs
             .values()
@@ -108,7 +135,7 @@ impl LanguageRegistry {
     }
 
     pub fn install(&mut self, language: Language) -> Result<(), LanguageError> {
-        if language.is_builtin() || self.is_installed(language) {
+        if language.is_builtin() || (self.is_installed(language) && !self.needs_update(language)) {
             return Ok(());
         }
 
@@ -196,6 +223,11 @@ impl LanguageRegistry {
         Ok(())
     }
 
+    pub fn pack_asset(&self, language: Language, name: &str) -> Option<PathBuf> {
+        let path = self.pack_dir(language).join(name);
+        path.exists().then_some(path)
+    }
+
     fn languages_dir(&self) -> PathBuf {
         self.data_dir.join("languages")
     }
@@ -281,12 +313,29 @@ fn parse_glyphs(bytes: &[u8]) -> Result<BTreeMap<char, PackedGlyph>, LanguageErr
 fn copy_pack(source: &Path, destination: &Path) -> Result<(), LanguageError> {
     fs::create_dir_all(destination)
         .map_err(|error| LanguageError(format!("cannot stage language pack: {error}")))?;
-    for name in ["manifest.txt", "glyphs.bin", "LICENSE"] {
-        let from = source.join(name);
-        if from.exists() {
-            fs::copy(&from, destination.join(name)).map_err(|error| {
+    copy_pack_entries(source, destination)
+}
+
+fn copy_pack_entries(source: &Path, destination: &Path) -> Result<(), LanguageError> {
+    for entry in fs::read_dir(source)
+        .map_err(|error| LanguageError(format!("cannot read language pack: {error}")))?
+    {
+        let entry = entry
+            .map_err(|error| LanguageError(format!("cannot inspect language pack: {error}")))?;
+        let from = entry.path();
+        if from.is_file() {
+            fs::copy(&from, destination.join(entry.file_name())).map_err(|error| {
                 LanguageError(format!("cannot copy {}: {error}", from.display()))
             })?;
+        } else if from.is_dir() {
+            let child_destination = destination.join(entry.file_name());
+            fs::create_dir_all(&child_destination).map_err(|error| {
+                LanguageError(format!(
+                    "cannot create {}: {error}",
+                    child_destination.display()
+                ))
+            })?;
+            copy_pack_entries(&from, &child_destination)?;
         }
     }
     Ok(())
@@ -369,6 +418,7 @@ mod tests {
             .install_from_source(Language::Korean, Path::new("language-packs/ko"))
             .unwrap();
         assert!(registry.is_installed(Language::Korean));
+        assert!(registry.supports_live_input(Language::Korean));
         assert_eq!(registry.glyph('한').map(|glyph| glyph.width), Some(10));
 
         registry.remove(Language::Korean).unwrap();
@@ -382,5 +432,57 @@ mod tests {
         for character in ['あ', 'ア', '日', '本', '語'] {
             assert!(pack.glyphs.contains_key(&character), "missing {character}");
         }
+    }
+
+    #[test]
+    fn japanese_pack_without_conversion_model_requires_update() {
+        let root = unique_data_dir("stale-japanese");
+        let mut registry = LanguageRegistry::load_from(root.clone());
+        registry
+            .install_from_source(Language::Japanese, Path::new("language-packs/ja"))
+            .unwrap();
+
+        assert!(registry.is_installed(Language::Japanese));
+        assert!(!registry.supports_live_input(Language::Japanese));
+        assert!(registry.needs_update(Language::Japanese));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn install_from_source_copies_extra_language_pack_assets() {
+        let root = unique_data_dir("extra-assets");
+        let source = root.join("source");
+        fs::create_dir_all(&source).unwrap();
+        fs::copy(
+            "language-packs/ja/manifest.txt",
+            source.join("manifest.txt"),
+        )
+        .unwrap();
+        fs::copy("language-packs/ja/glyphs.bin", source.join("glyphs.bin")).unwrap();
+        fs::write(source.join("LICENSE"), "license").unwrap();
+        fs::create_dir_all(source.join("akaza-default-model")).unwrap();
+        for name in [
+            "unigram.model",
+            "bigram.model",
+            "skip_bigram.model",
+            "SKK-JISYO.akaza",
+        ] {
+            fs::write(source.join("akaza-default-model").join(name), "fixture").unwrap();
+        }
+
+        let mut registry = LanguageRegistry::load_from(root.clone());
+        registry
+            .install_from_source(Language::Japanese, &source)
+            .unwrap();
+        assert!(registry.supports_live_input(Language::Japanese));
+        assert!(!registry.needs_update(Language::Japanese));
+
+        let copied = registry
+            .pack_asset(Language::Japanese, "akaza-default-model/unigram.model")
+            .expect("extra asset should be available");
+        assert_eq!(fs::read_to_string(copied).unwrap(), "fixture");
+
+        let _ = fs::remove_dir_all(root);
     }
 }

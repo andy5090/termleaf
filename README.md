@@ -36,20 +36,23 @@ on the words, and save without leaving the terminal.
 - **Big pixel font zone** — a short cursor-side phrase is drawn with
   [Galmuri9](https://quiple.dev/font/galmuri) pixels. English is built in;
   optional Korean and Japanese packs add Hangul, kana, and CJK glyphs.
-- **Optional live Hangul composition** — press `F2` to make one enlarged
-  character slot evolve in place as `ㅎ` → `하` → `한`, matching normal Hangul,
+- **Optional in-app input modes** — `F2` cycles through the installed input
+  languages. Live Korean makes one enlarged character slot evolve in place as
+  `ㅎ` → `하` → `한`, matching normal Hangul,
   including complex vowels (ㅘ, ㅢ …), double tails (ㄳ, ㄺ …), and the ghost
   rule (닭 + ㅏ → 달가).
 - **Themes** — `paper`, true-black `night`, phosphor-green `xt`, and `amber`.
 - **Installable language support** — English is built in, while Korean and
-  Japanese UI, guidance, and enlarged-text glyphs are managed from `F9`.
+  Japanese UI, guidance, enlarged-text glyphs, and the Japanese offline
+  conversion model are managed from `F9`.
 - **Built-in guidance** — the startup guide explains OS vs. Live Korean input;
   its “Don’t show again” checkbox is optional, and `F1` always reopens the full
   shortcut reference.
 - **Optional writing ambience** — choose `classic`, `deep`, or `soft` key
   sounds, with independently configurable delete and return effects. Audio can
   be disabled completely.
-- **Small footprint** — direct dependencies are `crossterm` and `rodio`.
+- **Small core** — optional glyphs and language models stay in separately
+  installed language packs.
 
 ## Install
 
@@ -139,8 +142,8 @@ plugin.
 | --- | --- |
 | typing | insert text from the operating-system input method |
 | `F1` | open the help and startup-guide settings |
-| `F2` | toggle Termleaf's optional `Live Korean` composer |
-| `Shift+F2` | toggle `Live Japanese` romaji-to-kana input |
+| `F2` | cycle installed input modes forward (`OS → Korean → Japanese`) |
+| `Shift+F2` | cycle installed in-app input modes in reverse |
 | `Ctrl+K` | switch Hiragana/Katakana while Live Japanese is active |
 | `F3` | toggle focus mode |
 | `F4` | toggle the big-font zone |
@@ -193,9 +196,11 @@ termleaf language remove ja
 ```
 
 Language packs are stored under `${XDG_DATA_HOME:-~/.local/share}/termleaf/languages`.
-They contain a manifest, Galmuri glyph data, and its OFL license—never executable
-plugin code. Documents continue to accept Unicode input from the operating
-system regardless of the selected interface language.
+They contain a manifest, Galmuri glyph data, licenses, and optional language
+models—never executable plugin code. Documents continue to accept Unicode input
+from the operating system regardless of the selected interface language.
+Japanese packs installed before contextual conversion are shown as **Update
+needed** in `F9`; select Japanese and press `Enter` to replace the old pack.
 
 ## Typing Korean and Japanese
 
@@ -205,18 +210,29 @@ on macOS (or a configured Globe/Fn key), `Win+Space` on Windows, or the desktop
 shortcut on Linux (`Super+Space` by default in GNOME). The input source must be
 installed in the operating system first.
 
-`F2` toggles the optional `Live Korean` (`IME:KO`) practice mode; it is not
-the operating system's 한/영 switch. In this mode Termleaf maps raw English-layout keys using standard
+`F2` cycles forward through the installed in-app input modes; `Shift+F2`
+cycles in reverse. With both packs installed the order is `IME:OS → IME:KO →
+IME:JA → IME:OS`, and unavailable languages are skipped. This is separate
+from the operating system's input-language switch.
+
+In `IME:KO`, Termleaf maps raw English-layout keys using standard
 **두벌식**, e.g. `g k s` → **한**. The big zone updates one character slot in
 place as `ㅎ` → `하` → `한`, and `Backspace` disassembles that same cluster one
 step at a time. Set the OS keyboard to English while using `IME:KO`, since
 Termleaf needs the raw Latin key events to expose each intermediate step.
 
-`Shift+F2` toggles `Live Japanese`, which converts common romaji sequences to
-Hiragana inside Termleaf (`konnichiha` → `こんにちは`). Press `Ctrl+K` to switch
-between Hiragana (`IME:JAあ`) and Katakana (`IME:JAア`). This lightweight mode
-does not offer kanji candidates; use the normal macOS, Windows, or Linux IME
-when kana-to-kanji conversion is needed.
+In `IME:JA`, common romaji sequences become Hiragana inside Termleaf
+(`konnichiha` → `こんにちは`). Press `Space` or `Tab`
+to start contextual kana-to-kanji conversion, `Shift+Tab` to move to the
+previous candidate, and `Left`/`Right` to select another clause. `Enter`
+confirms the conversion; `Esc` returns to raw kana without committing. Press
+`Ctrl+K` to switch the unconfirmed kana view between Hiragana (`IME:JAあ`) and
+Katakana (`IME:JAア`).
+
+The Japanese language pack includes Akaza's offline unigram, bigram, and
+skip-bigram model, so whole-sentence conversion considers neighboring words
+without sending text to a server or starting a separate IME process. The pack
+is roughly 150 MB to download and about 320 MB after installation.
 
 You can also open a document directly from the shell:
 

@@ -1,0 +1,24 @@
+Akaza Japanese conversion model
+
+Termleaf's optional Japanese language pack redistributes the default model
+from Akaza v2026.602.0:
+
+https://github.com/akaza-im/akaza/releases/tag/v2026.602.0
+
+Akaza is Copyright (c) 2023 Tokuhiro Matsuno and is distributed under the MIT
+License. The model is built from open language resources including Japanese
+Wikipedia, Aozora Bunko public-domain works, and CC-100 Japanese/Common Crawl.
+
+Because the generated model contains statistics derived from Japanese
+Wikipedia, redistribution is subject to Creative Commons Attribution-
+ShareAlike 4.0 International (CC BY-SA 4.0):
+
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Japanese Wikipedia attribution: Wikimedia Foundation and the contributors to
+Japanese Wikipedia. Source: https://ja.wikipedia.org/
+
+The model build pipeline and complete provenance are documented upstream:
+
+https://github.com/akaza-im/akaza/tree/v2026.602.0/default-model
+https://github.com/akaza-im/akaza/tree/v2026.602.0/corpus-stats

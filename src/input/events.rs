@@ -13,6 +13,9 @@ pub enum Action {
     Jamo(char),
     /// Feed a romaji keystroke into the Japanese kana composer.
     Romaji(char),
+    JapaneseConvertNext,
+    JapaneseConvertPrev,
+    CancelComposition,
     Backspace,
     Delete,
     Newline,
@@ -22,8 +25,8 @@ pub enum Action {
     Down,
     Home,
     End,
-    ToggleLiveComposition,
-    ToggleLiveJapanese,
+    CycleLiveInput,
+    CycleLiveInputReverse,
     ToggleJapaneseScript,
     ShowHelp,
     ToggleFocus,
@@ -68,8 +71,13 @@ pub fn map_key(key: KeyEvent, live_composition: bool, live_japanese: bool) -> Ac
             Action::TogglePageWidth
         }
         KeyCode::F(1) => Action::ShowHelp,
-        KeyCode::F(2) if key.modifiers.contains(KeyModifiers::SHIFT) => Action::ToggleLiveJapanese,
-        KeyCode::F(2) => Action::ToggleLiveComposition,
+        KeyCode::F(2) if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            Action::CycleLiveInputReverse
+        }
+        // Some macOS terminals encode Shift+F2 as the legacy F14 key instead
+        // of preserving F2 with a Shift modifier.
+        KeyCode::F(14) => Action::CycleLiveInputReverse,
+        KeyCode::F(2) => Action::CycleLiveInput,
         KeyCode::F(3) => Action::ToggleFocus,
         KeyCode::F(4) => Action::ToggleBigFont,
         KeyCode::F(5) if key.modifiers.contains(KeyModifiers::SHIFT) => Action::CycleLineSpacing,
@@ -81,8 +89,10 @@ pub fn map_key(key: KeyEvent, live_composition: bool, live_japanese: bool) -> Ac
         KeyCode::F(10) => Action::ShowSoundSettings,
         KeyCode::F(11) => Action::CycleSoundProfile,
         KeyCode::F(12) => Action::SaveAs,
+        KeyCode::BackTab if live_japanese => Action::JapaneseConvertPrev,
         KeyCode::Backspace => Action::Backspace,
         KeyCode::Delete => Action::Delete,
+        KeyCode::Esc if live_japanese => Action::CancelComposition,
         KeyCode::Enter => Action::Newline,
         KeyCode::Left => Action::Left,
         KeyCode::Right => Action::Right,
@@ -90,7 +100,9 @@ pub fn map_key(key: KeyEvent, live_composition: bool, live_japanese: bool) -> Ac
         KeyCode::Down => Action::Down,
         KeyCode::Home => Action::Home,
         KeyCode::End => Action::End,
+        KeyCode::Tab if live_japanese => Action::JapaneseConvertNext,
         KeyCode::Tab => Action::InsertChar('\t'),
+        KeyCode::Char(' ') if live_japanese => Action::JapaneseConvertNext,
         KeyCode::Char(c) => {
             if live_japanese && (c.is_ascii_alphabetic() || matches!(c, '-' | '\'')) {
                 Action::Romaji(c)
@@ -154,7 +166,7 @@ mod tests {
                 false,
                 false
             ),
-            Action::ToggleLiveComposition
+            Action::CycleLiveInput
         );
         assert_eq!(
             map_key(
@@ -162,7 +174,15 @@ mod tests {
                 false,
                 false
             ),
-            Action::ToggleLiveJapanese
+            Action::CycleLiveInputReverse
+        );
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::F(14), KeyModifiers::NONE),
+                true,
+                false
+            ),
+            Action::CycleLiveInputReverse
         );
         assert_eq!(
             map_key(
@@ -274,6 +294,30 @@ mod tests {
                 true
             ),
             Action::ToggleJapaneseScript
+        );
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE),
+                false,
+                true
+            ),
+            Action::JapaneseConvertNext
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), false, true),
+            Action::JapaneseConvertNext
+        );
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+                false,
+                true
+            ),
+            Action::JapaneseConvertPrev
+        );
+        assert_eq!(
+            map_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), false, true),
+            Action::CancelComposition
         );
     }
 }

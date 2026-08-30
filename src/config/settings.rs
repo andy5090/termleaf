@@ -11,6 +11,13 @@ pub const MAX_FONT: u16 = 5;
 pub const MIN_LINE_SPACING: u16 = 1;
 pub const MAX_LINE_SPACING: u16 = 3;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiveInputMode {
+    Off,
+    Korean,
+    Japanese,
+}
+
 /// Runtime configuration for the app.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -238,6 +245,46 @@ impl Config {
         .to_string();
     }
 
+    pub fn live_input_mode(&self) -> LiveInputMode {
+        if self.live_japanese {
+            LiveInputMode::Japanese
+        } else if self.live_composition {
+            LiveInputMode::Korean
+        } else {
+            LiveInputMode::Off
+        }
+    }
+
+    /// Cycle through the installed in-app input modes. `F2` calls this in
+    /// forward order and `Shift+F2` in reverse order.
+    pub fn cycle_live_input(
+        &mut self,
+        available: &[LiveInputMode],
+        reverse: bool,
+    ) -> LiveInputMode {
+        let mut modes = vec![LiveInputMode::Off];
+        modes.extend(
+            available
+                .iter()
+                .copied()
+                .filter(|mode| *mode != LiveInputMode::Off),
+        );
+
+        let current = modes
+            .iter()
+            .position(|mode| *mode == self.live_input_mode())
+            .unwrap_or(0);
+        let next = if reverse {
+            (current + modes.len() - 1) % modes.len()
+        } else {
+            (current + 1) % modes.len()
+        };
+        let mode = modes[next];
+        self.live_composition = mode == LiveInputMode::Korean;
+        self.live_japanese = mode == LiveInputMode::Japanese;
+        mode
+    }
+
     pub fn cycle_sound_profile(&mut self) {
         self.sound_profile = match self.sound_profile.as_str() {
             "classic" => "deep",
@@ -386,5 +433,54 @@ mod tests {
         let restored = Config::from_text("live_composition = true\nlive_japanese = true\n");
         assert!(!restored.live_composition);
         assert!(restored.live_japanese);
+    }
+
+    #[test]
+    fn live_input_cycles_over_installed_languages_in_both_directions() {
+        let mut cfg = Config::default();
+
+        assert_eq!(
+            cfg.cycle_live_input(&[LiveInputMode::Korean, LiveInputMode::Japanese], false),
+            LiveInputMode::Korean
+        );
+        assert_eq!(
+            cfg.cycle_live_input(&[LiveInputMode::Korean, LiveInputMode::Japanese], false),
+            LiveInputMode::Japanese
+        );
+        assert_eq!(
+            cfg.cycle_live_input(&[LiveInputMode::Korean, LiveInputMode::Japanese], false),
+            LiveInputMode::Off
+        );
+        assert_eq!(
+            cfg.cycle_live_input(&[LiveInputMode::Korean, LiveInputMode::Japanese], true),
+            LiveInputMode::Japanese
+        );
+        assert_eq!(
+            cfg.cycle_live_input(&[LiveInputMode::Korean, LiveInputMode::Japanese], true),
+            LiveInputMode::Korean
+        );
+        assert_eq!(
+            cfg.cycle_live_input(&[LiveInputMode::Korean, LiveInputMode::Japanese], true),
+            LiveInputMode::Off
+        );
+    }
+
+    #[test]
+    fn live_input_cycle_skips_languages_that_are_not_installed() {
+        let mut korean_only = Config::default();
+        assert_eq!(
+            korean_only.cycle_live_input(&[LiveInputMode::Korean], false),
+            LiveInputMode::Korean
+        );
+        assert_eq!(
+            korean_only.cycle_live_input(&[LiveInputMode::Korean], false),
+            LiveInputMode::Off
+        );
+
+        let mut japanese_only = Config::default();
+        assert_eq!(
+            japanese_only.cycle_live_input(&[LiveInputMode::Japanese], false),
+            LiveInputMode::Japanese
+        );
     }
 }

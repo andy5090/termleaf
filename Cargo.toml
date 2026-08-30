@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 crossterm = "0.28"
+libakaza = { git = "https://github.com/akaza-im/akaza.git", rev = "33e5e422810377190f55551acf2510d8954c29d5" }
 rodio = { version = "0.22.2", default-features = false, features = ["playback"] }
 
 [patch.crates-io]
@@ -23,6 +24,10 @@ rodio = { version = "0.22.2", default-features = false, features = ["playback"] 
 # terminating the audio callback thread on its first buffer. The vendored copy
 # backports upstream RustAudio/cpal#1137 until Rodio accepts CPAL 0.18.
 cpal = { path = "vendor/cpal" }
+# rsmarisa 0.4.2 translates a C++ pointer expression into unsigned subtraction
+# in predictive prefix search. Akaza reaches the underflow with normal Japanese
+# dictionary queries, so the vendored copy preserves the initial query offset.
+rsmarisa = { path = "vendor/rsmarisa" }
 
 [profile.release]
 opt-level = 3
