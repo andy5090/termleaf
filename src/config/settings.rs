@@ -53,6 +53,8 @@ pub struct Config {
     pub language: String,
     /// Show the welcome/help overlay when Termleaf starts.
     pub show_welcome: bool,
+    /// Show a clickable command bar for touchscreens and software keyboards.
+    pub touch_mode: bool,
     /// Autosave interval in seconds; `0` disables autosave.
     pub autosave_secs: u64,
 }
@@ -75,6 +77,7 @@ impl Default for Config {
             theme: "paper".to_string(),
             language: "en".to_string(),
             show_welcome: true,
+            touch_mode: cfg!(target_os = "android"),
             autosave_secs: 30,
         }
     }
@@ -156,6 +159,7 @@ impl Config {
                     .to_string();
                 }
                 "show_welcome" => cfg.show_welcome = parse_bool(value, cfg.show_welcome),
+                "touch_mode" => cfg.touch_mode = parse_bool(value, cfg.touch_mode),
                 "autosave_secs" => {
                     if let Ok(n) = value.parse::<u64>() {
                         cfg.autosave_secs = n;
@@ -200,6 +204,7 @@ impl Config {
              theme = {}\n\
              language = {}\n\
              show_welcome = {}\n\
+             touch_mode = {}\n\
              autosave_secs = {}\n",
             self.live_composition,
             self.live_japanese,
@@ -216,6 +221,7 @@ impl Config {
             self.theme,
             self.language,
             self.show_welcome,
+            self.touch_mode,
             self.autosave_secs,
         )
     }
@@ -401,6 +407,7 @@ mod tests {
             theme: "xt".to_string(),
             language: "ko".to_string(),
             show_welcome: false,
+            touch_mode: true,
             autosave_secs: 12,
         };
 
@@ -419,6 +426,7 @@ mod tests {
         assert_eq!(restored.theme, "xt");
         assert_eq!(restored.language, "ko");
         assert!(!restored.show_welcome);
+        assert!(restored.touch_mode);
         assert_eq!(restored.autosave_secs, 12);
     }
 

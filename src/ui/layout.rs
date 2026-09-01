@@ -24,15 +24,12 @@ pub struct Layout {
 impl Layout {
     pub fn compute(cols: u16, rows: u16, cfg: &Config) -> Layout {
         let status_visible = !cfg.focus_mode;
-        let status_reserve: u16 = if status_visible {
-            if rows >= 3 {
-                2
-            } else {
-                1
-            }
-        } else {
-            0
-        };
+        // The normal shortcut guide accompanies the status bar. Touch mode
+        // keeps its command bar available even in focus mode, provided there
+        // is still at least one editable row above it.
+        let controls_visible =
+            (status_visible && rows >= 3) || (cfg.touch_mode && !status_visible && rows >= 2);
+        let status_reserve = u16::from(status_visible) + u16::from(controls_visible);
         let avail = rows.saturating_sub(status_reserve).max(1);
 
         let mut big_enabled = false;
@@ -66,7 +63,7 @@ impl Layout {
         } else {
             None
         };
-        let shortcut_row = if status_reserve == 2 {
+        let shortcut_row = if controls_visible {
             Some(rows - 1)
         } else {
             None
@@ -112,10 +109,25 @@ mod tests {
         assert_eq!(compact.shortcut_row, Some(3));
 
         cfg.focus_mode = true;
+        cfg.touch_mode = false;
         let focused = Layout::compute(20, 4, &cfg);
         assert_eq!(focused.status_row, None);
         assert_eq!(focused.shortcut_row, None);
         assert_eq!(focused.doc_height, 4);
+    }
+
+    #[test]
+    fn touch_controls_remain_visible_in_focus_mode_without_starving_the_document() {
+        let cfg = Config {
+            focus_mode: true,
+            touch_mode: true,
+            ..Config::default()
+        };
+        let layout = Layout::compute(40, 8, &cfg);
+
+        assert_eq!(layout.status_row, None);
+        assert_eq!(layout.shortcut_row, Some(7));
+        assert_eq!(layout.doc_height, 7);
     }
 
     #[test]
@@ -130,6 +142,7 @@ mod tests {
         assert_eq!(normal.doc_height, 21);
 
         cfg.focus_mode = true;
+        cfg.touch_mode = false;
         let focused = Layout::compute(80, 24, &cfg);
         assert_eq!(focused.doc_top, 1);
         assert_eq!(focused.doc_height, 23);

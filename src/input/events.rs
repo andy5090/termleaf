@@ -39,6 +39,7 @@ pub enum Action {
     FontDec,
     CycleLineSpacing,
     TogglePageWidth,
+    ToggleTouchMode,
     Open,
     Save,
     SaveAs,
@@ -57,6 +58,7 @@ pub fn map_key(key: KeyEvent, live_composition: bool, live_japanese: bool) -> Ac
             'o' => Action::Open,
             's' if key.modifiers.contains(KeyModifiers::SHIFT) => Action::SaveAs,
             's' => Action::Save,
+            't' => Action::ToggleTouchMode,
             'k' if live_japanese => Action::ToggleJapaneseScript,
             _ => Action::Ignore,
         },
@@ -140,6 +142,14 @@ mod tests {
                 false
             ),
             Action::Open
+        );
+        assert_eq!(
+            map_key(
+                KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL),
+                false,
+                false
+            ),
+            Action::ToggleTouchMode
         );
         assert_eq!(
             map_key(

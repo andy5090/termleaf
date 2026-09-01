@@ -18,7 +18,10 @@ use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
+};
+use crossterm::terminal;
 
 use audio::SoundPlayer;
 use config::{Config, LiveInputMode};
@@ -28,7 +31,7 @@ use language::{Language, LanguageRegistry};
 use renderer::{draw, TerminalGuard};
 use ui::{
     FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, LanguageSettings, SoundSettings,
-    Theme,
+    Theme, TouchCommand, TouchContext, TouchPage,
 };
 
 fn main() -> io::Result<()> {
@@ -103,7 +106,7 @@ fn main() -> io::Result<()> {
     }
 
     // The guard restores the terminal on drop (including on panic/error).
-    let _guard = TerminalGuard::enter()?;
+    let mut terminal_guard = TerminalGuard::enter(cfg.touch_mode)?;
     let mut stdout = io::stdout();
     let mut theme = Theme::by_name(&cfg.theme);
     let mut last_autosave = Instant::now();
@@ -114,6 +117,7 @@ fn main() -> io::Result<()> {
         sound_settings: None,
         language_settings: None,
         pending_language_install: None,
+        touch_page: TouchPage::Primary,
     };
     let mut needs_redraw = true;
 
@@ -130,6 +134,7 @@ fn main() -> io::Result<()> {
                     sound_settings: ui.sound_settings.as_ref(),
                     language_settings: ui.language_settings.as_ref(),
                     languages: &languages,
+                    touch_page: ui.touch_page,
                 },
             )?;
             needs_redraw = false;
@@ -204,6 +209,7 @@ fn main() -> io::Result<()> {
                             break;
                         }
                         needs_redraw = !matches!(action, Action::Ignore);
+                        let previous_touch_mode = cfg.touch_mode;
                         apply(
                             &mut editor,
                             &mut cfg,
@@ -213,6 +219,46 @@ fn main() -> io::Result<()> {
                             &mut ui,
                             action,
                         );
+                        if cfg.touch_mode != previous_touch_mode {
+                            terminal_guard.set_mouse_capture(cfg.touch_mode)?;
+                        }
+                    }
+                }
+                Event::Mouse(mouse)
+                    if cfg.touch_mode
+                        && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) =>
+                {
+                    let (cols, rows) = terminal::size()?;
+                    let layout = ui::Layout::compute(cols, rows, &cfg);
+                    if layout.shortcut_row == Some(mouse.row) {
+                        let context = touch_context(&ui);
+                        let locale =
+                            Language::from_code(&cfg.language).unwrap_or(Language::English);
+                        if let Some(command) = ui::touch::command_at(
+                            mouse.column,
+                            cols,
+                            context,
+                            ui.touch_page,
+                            locale,
+                        ) {
+                            let previous_touch_mode = cfg.touch_mode;
+                            if handle_touch_command(
+                                command,
+                                context,
+                                &mut editor,
+                                &mut cfg,
+                                &mut theme,
+                                &sound,
+                                &mut languages,
+                                &mut ui,
+                            ) {
+                                break;
+                            }
+                            if cfg.touch_mode != previous_touch_mode {
+                                terminal_guard.set_mouse_capture(cfg.touch_mode)?;
+                            }
+                            needs_redraw = true;
+                        }
                     }
                 }
                 Event::Resize(_, _) => needs_redraw = true,
@@ -345,7 +391,8 @@ Options:
   -h, --help       Show this help
   -V, --version    Show the installed version
 
-Inside Termleaf, press F1 for editing shortcuts and input guidance.",
+Inside Termleaf, press F1 for editing shortcuts and input guidance.
+Press Ctrl+T to toggle the touch command bar for narrow screens and software keyboards.",
         version = env!("CARGO_PKG_VERSION")
     );
 }
@@ -458,6 +505,144 @@ struct UiState {
     sound_settings: Option<SoundSettings>,
     language_settings: Option<LanguageSettings>,
     pending_language_install: Option<Language>,
+    touch_page: TouchPage,
+}
+
+fn touch_context(ui: &UiState) -> TouchContext {
+    if ui.language_settings.is_some() {
+        TouchContext::Language
+    } else if ui.help.is_some() {
+        TouchContext::Help
+    } else if ui.sound_settings.is_some() {
+        TouchContext::Sound
+    } else if let Some(prompt) = ui.file_prompt.as_ref() {
+        match prompt.kind {
+            FilePromptKind::Open => TouchContext::OpenPrompt,
+            FilePromptKind::SaveAs => TouchContext::SavePrompt,
+        }
+    } else {
+        TouchContext::Editor
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_touch_command(
+    command: TouchCommand,
+    context: TouchContext,
+    editor: &mut Editor,
+    cfg: &mut Config,
+    theme: &mut Theme,
+    sound: &SoundPlayer,
+    languages: &mut LanguageRegistry,
+    ui: &mut UiState,
+) -> bool {
+    let action = match command {
+        TouchCommand::ShowHelp => Some(Action::ShowHelp),
+        TouchCommand::CycleInput => Some(Action::CycleLiveInput),
+        TouchCommand::Open => Some(Action::Open),
+        TouchCommand::Save => Some(Action::Save),
+        TouchCommand::ToggleBigFont => Some(Action::ToggleBigFont),
+        TouchCommand::TogglePageWidth => Some(Action::TogglePageWidth),
+        TouchCommand::ToggleTheme => Some(Action::ToggleTheme),
+        TouchCommand::ShowLanguages => Some(Action::ShowLanguageSettings),
+        TouchCommand::ShowSound => Some(Action::ShowSoundSettings),
+        TouchCommand::ToggleFocus => Some(Action::ToggleFocus),
+        TouchCommand::FontDec => Some(Action::FontDec),
+        TouchCommand::FontInc => Some(Action::FontInc),
+        TouchCommand::CycleLineSpacing => Some(Action::CycleLineSpacing),
+        TouchCommand::SaveAs => Some(Action::SaveAs),
+        TouchCommand::ToggleTouchMode => Some(Action::ToggleTouchMode),
+        TouchCommand::NextPage => {
+            ui.touch_page = match ui.touch_page {
+                TouchPage::Primary => TouchPage::Display,
+                TouchPage::Display => TouchPage::Tools,
+                TouchPage::Tools => TouchPage::Primary,
+            };
+            None
+        }
+        TouchCommand::PrimaryPage => {
+            ui.touch_page = TouchPage::Primary;
+            None
+        }
+        _ => None,
+    };
+    if let Some(action) = action {
+        apply(editor, cfg, theme, sound, languages, ui, action);
+        return false;
+    }
+
+    let key = |code| KeyEvent::new(code, KeyModifiers::NONE);
+    match (context, command) {
+        (TouchContext::Help, TouchCommand::ToggleHelpPreference) => {
+            handle_help_key(key(KeyCode::Char(' ')), cfg, &mut ui.help)
+        }
+        (TouchContext::Help, TouchCommand::Cancel) => {
+            handle_help_key(key(KeyCode::Esc), cfg, &mut ui.help)
+        }
+        (TouchContext::Sound, TouchCommand::Previous) => {
+            handle_sound_settings_key(key(KeyCode::Up), cfg, sound, &mut ui.sound_settings)
+        }
+        (TouchContext::Sound, TouchCommand::Next) => {
+            handle_sound_settings_key(key(KeyCode::Down), cfg, sound, &mut ui.sound_settings)
+        }
+        (TouchContext::Sound, TouchCommand::Activate) => {
+            handle_sound_settings_key(key(KeyCode::Char(' ')), cfg, sound, &mut ui.sound_settings)
+        }
+        (TouchContext::Sound, TouchCommand::Cancel) => {
+            handle_sound_settings_key(key(KeyCode::Esc), cfg, sound, &mut ui.sound_settings)
+        }
+        (TouchContext::Language, TouchCommand::Previous) => handle_language_settings_key(
+            key(KeyCode::Up),
+            cfg,
+            languages,
+            &mut ui.language_settings,
+            &mut ui.pending_language_install,
+        ),
+        (TouchContext::Language, TouchCommand::Next) => handle_language_settings_key(
+            key(KeyCode::Down),
+            cfg,
+            languages,
+            &mut ui.language_settings,
+            &mut ui.pending_language_install,
+        ),
+        (TouchContext::Language, TouchCommand::Activate) => handle_language_settings_key(
+            key(KeyCode::Enter),
+            cfg,
+            languages,
+            &mut ui.language_settings,
+            &mut ui.pending_language_install,
+        ),
+        (TouchContext::Language, TouchCommand::Remove) => handle_language_settings_key(
+            key(KeyCode::Delete),
+            cfg,
+            languages,
+            &mut ui.language_settings,
+            &mut ui.pending_language_install,
+        ),
+        (TouchContext::Language, TouchCommand::Cancel) => handle_language_settings_key(
+            key(KeyCode::Esc),
+            cfg,
+            languages,
+            &mut ui.language_settings,
+            &mut ui.pending_language_install,
+        ),
+        (TouchContext::OpenPrompt, TouchCommand::Previous) => {
+            handle_file_prompt(key(KeyCode::Up), editor, &mut ui.file_prompt)
+        }
+        (TouchContext::OpenPrompt, TouchCommand::Next) => {
+            handle_file_prompt(key(KeyCode::Down), editor, &mut ui.file_prompt)
+        }
+        (TouchContext::OpenPrompt, TouchCommand::Complete) => {
+            handle_file_prompt(key(KeyCode::Tab), editor, &mut ui.file_prompt)
+        }
+        (TouchContext::OpenPrompt | TouchContext::SavePrompt, TouchCommand::Confirm) => {
+            handle_file_prompt(key(KeyCode::Enter), editor, &mut ui.file_prompt)
+        }
+        (TouchContext::OpenPrompt | TouchContext::SavePrompt, TouchCommand::Cancel) => {
+            handle_file_prompt(key(KeyCode::Esc), editor, &mut ui.file_prompt)
+        }
+        _ => false,
+    }
 }
 
 fn handle_language_settings_key(
@@ -652,6 +837,10 @@ fn apply(
         Action::FontDec => cfg.font_dec(),
         Action::CycleLineSpacing => cfg.cycle_line_spacing(),
         Action::TogglePageWidth => cfg.page_width = !cfg.page_width,
+        Action::ToggleTouchMode => {
+            cfg.touch_mode = !cfg.touch_mode;
+            ui.touch_page = TouchPage::Primary;
+        }
         Action::Open => ui.file_prompt = Some(FilePrompt::open(editor.doc.path.as_deref())),
         Action::Save => {
             if editor.doc.path.is_some() {

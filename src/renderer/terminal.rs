@@ -2,6 +2,7 @@
 
 use std::io::{self, Stdout};
 
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::style::{Color, Print, SetBackgroundColor, SetForegroundColor};
 use crossterm::{cursor, queue, terminal, SynchronizedUpdate};
 
@@ -12,27 +13,50 @@ use crate::editor::Editor;
 use crate::language::{Language, LanguageRegistry};
 use crate::ui::{
     char_width, FilePrompt, FilePromptError, FilePromptKind, HelpOverlay, LanguageSettings, Layout,
-    SoundSettings, Theme,
+    SoundSettings, Theme, TouchContext, TouchPage,
 };
 
 const PAGE_CONTENT_WIDTH: u16 = 80;
 
 /// RAII guard: enters raw mode + the alternate screen on creation and restores
 /// the terminal on drop (including on panic).
-pub struct TerminalGuard;
+pub struct TerminalGuard {
+    mouse_capture: bool,
+}
 
 impl TerminalGuard {
-    pub fn enter() -> io::Result<Self> {
+    pub fn enter(mouse_capture: bool) -> io::Result<Self> {
         terminal::enable_raw_mode()?;
         let mut out = io::stdout();
         crossterm::execute!(out, terminal::EnterAlternateScreen, cursor::Hide)?;
-        Ok(TerminalGuard)
+        let mut guard = TerminalGuard {
+            mouse_capture: false,
+        };
+        guard.set_mouse_capture(mouse_capture)?;
+        Ok(guard)
+    }
+
+    pub fn set_mouse_capture(&mut self, enabled: bool) -> io::Result<()> {
+        if self.mouse_capture == enabled {
+            return Ok(());
+        }
+        let mut out = io::stdout();
+        if enabled {
+            crossterm::execute!(out, EnableMouseCapture)?;
+        } else {
+            crossterm::execute!(out, DisableMouseCapture)?;
+        }
+        self.mouse_capture = enabled;
+        Ok(())
     }
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let mut out = io::stdout();
+        if self.mouse_capture {
+            let _ = crossterm::execute!(out, DisableMouseCapture);
+        }
         let _ = crossterm::execute!(out, cursor::Show, terminal::LeaveAlternateScreen);
         let _ = terminal::disable_raw_mode();
     }
@@ -48,6 +72,7 @@ pub struct View<'a> {
     pub sound_settings: Option<&'a SoundSettings>,
     pub language_settings: Option<&'a LanguageSettings>,
     pub languages: &'a LanguageRegistry,
+    pub touch_page: TouchPage,
 }
 
 pub fn draw(out: &mut Stdout, view: View<'_>) -> io::Result<()> {
@@ -74,6 +99,7 @@ pub fn draw(out: &mut Stdout, view: View<'_>) -> io::Result<()> {
         sound_settings: view.sound_settings,
         language_settings: view.language_settings,
         languages: view.languages,
+        touch_page: view.touch_page,
         layout: &layout,
         rows,
     };
@@ -90,6 +116,7 @@ struct Frame<'a> {
     sound_settings: Option<&'a SoundSettings>,
     language_settings: Option<&'a LanguageSettings>,
     languages: &'a LanguageRegistry,
+    touch_page: TouchPage,
     layout: &'a Layout,
     rows: u16,
 }
@@ -146,15 +173,27 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
     };
 
     if let Some(row) = frame.layout.shortcut_row {
-        draw_shortcuts(
-            out,
-            frame.editor,
-            frame.prompt,
-            frame.cfg,
-            frame.theme,
-            frame.layout.cols,
-            row,
-        )?;
+        if frame.cfg.touch_mode {
+            draw_touch_bar(
+                out,
+                touch_context(frame),
+                frame.touch_page,
+                frame.cfg,
+                frame.theme,
+                frame.layout.cols,
+                row,
+            )?;
+        } else {
+            draw_shortcuts(
+                out,
+                frame.editor,
+                frame.prompt,
+                frame.cfg,
+                frame.theme,
+                frame.layout.cols,
+                row,
+            )?;
+        }
     }
 
     if frame.help.is_none() && frame.sound_settings.is_none() && frame.language_settings.is_none() {
@@ -205,6 +244,23 @@ fn draw_frame(out: &mut Stdout, frame: &Frame<'_>) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn touch_context(frame: &Frame<'_>) -> TouchContext {
+    if frame.language_settings.is_some() {
+        TouchContext::Language
+    } else if frame.help.is_some() {
+        TouchContext::Help
+    } else if frame.sound_settings.is_some() {
+        TouchContext::Sound
+    } else if let Some(prompt) = frame.prompt {
+        match prompt.kind {
+            FilePromptKind::Open => TouchContext::OpenPrompt,
+            FilePromptKind::SaveAs => TouchContext::SavePrompt,
+        }
+    } else {
+        TouchContext::Editor
+    }
 }
 
 fn draw_language_settings(
@@ -541,6 +597,7 @@ fn draw_help(
     };
     let lines = match locale {
         Language::Korean => vec![
+            "모바일: 하단 버튼 터치 · Ctrl+T 터치 모드 전환",
             "표시 언어: F9에서 언어팩 설치·선택 (입력 언어와 별개)",
             input_switch_hint(locale),
             "OS 입력 소스가 먼저 설치되어 있어야 합니다.",
@@ -555,6 +612,7 @@ fn draw_help(
             "기타: Backspace/Delete 삭제 · F9 표시 언어 · F1 도움말 · Ctrl+Q 종료",
         ],
         Language::Japanese => vec![
+            "モバイル: 下のボタンをタップ · Ctrl+T タッチモード切替",
             "表示言語: F9でインストール・選択（入力言語とは別）",
             input_switch_hint(locale),
             "OS側に入力ソースを先に追加してください。",
@@ -569,6 +627,7 @@ fn draw_help(
             "その他: F9 表示言語 · F1 ヘルプ · Ctrl+Q 終了",
         ],
         Language::English => vec![
+            "Mobile: tap the bottom buttons · Ctrl+T toggles touch mode",
             "Display: F9 installs/selects UI language; typing is separate",
             input_switch_hint(locale),
             "Add the input source in your operating system first.",
@@ -1195,6 +1254,58 @@ fn draw_shortcuts(
     )
 }
 
+fn draw_touch_bar(
+    out: &mut Stdout,
+    context: TouchContext,
+    page: TouchPage,
+    cfg: &Config,
+    theme: &Theme,
+    cols: u16,
+    row: u16,
+) -> io::Result<()> {
+    let locale = Language::from_code(&cfg.language).unwrap_or(Language::English);
+    let buttons = crate::ui::touch::buttons(context, page, locale);
+    if buttons.is_empty() || cols == 0 {
+        return Ok(());
+    }
+
+    for (index, button) in buttons.iter().enumerate() {
+        let left = (index * usize::from(cols) / buttons.len()) as u16;
+        let right = ((index + 1) * usize::from(cols) / buttons.len()) as u16;
+        let width = right.saturating_sub(left);
+        if width == 0 {
+            continue;
+        }
+        // Preserve a little breathing room at normal widths. At very narrow
+        // mobile widths, use every cell so CJK buttons still show at least one
+        // complete character instead of becoming blank segments.
+        let label_width_limit = if width >= 5 {
+            width.saturating_sub(2)
+        } else {
+            width
+        };
+        let label = clipped(button.label, label_width_limit);
+        let label_width = text_width(&label);
+        let left_padding = width.saturating_sub(label_width) / 2;
+        let right_padding = width.saturating_sub(label_width + left_padding);
+        let (foreground, background) = if index % 2 == 0 {
+            (theme.bg, theme.fg)
+        } else {
+            (theme.bg, theme.dim)
+        };
+        queue!(
+            out,
+            cursor::MoveTo(left, row),
+            SetForegroundColor(foreground),
+            SetBackgroundColor(background),
+            Print(" ".repeat(left_padding as usize)),
+            Print(label),
+            Print(" ".repeat(right_padding as usize))
+        )?;
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy)]
 struct ShortcutGroup {
     modifier: Option<&'static str>,
@@ -1681,6 +1792,22 @@ mod tests {
 
         for language in Language::ALL {
             assert!(!shortcut_guide(language, 40).plain_text().contains("Alt+L"));
+        }
+    }
+
+    #[test]
+    fn touch_tools_keep_a_visible_label_on_a_very_narrow_screen() {
+        let cols = 24u16;
+        for language in Language::ALL {
+            let buttons =
+                crate::ui::touch::buttons(TouchContext::Editor, TouchPage::Tools, language);
+            for (index, button) in buttons.iter().enumerate() {
+                let left = (index * usize::from(cols) / buttons.len()) as u16;
+                let right = ((index + 1) * usize::from(cols) / buttons.len()) as u16;
+                let width = right - left;
+                let limit = if width >= 5 { width - 2 } else { width };
+                assert!(!clipped(button.label, limit).is_empty());
+            }
         }
     }
 

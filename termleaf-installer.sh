@@ -6,6 +6,7 @@ set -eu
 quiet=0
 modify_path=1
 language=""
+is_termux=0
 
 say() {
     if [ "$quiet" -eq 0 ]; then
@@ -151,6 +152,7 @@ case "$os_name" in
                     die "unsupported Android architecture: $cpu_name"
                     ;;
             esac
+            is_termux=1
             install_termux_audio_dependency
         else
             bitness=$(getconf LONG_BIT 2>/dev/null || printf '')
@@ -267,47 +269,105 @@ if [ -n "$language" ]; then
     fi
 fi
 
+path_contains() {
+    case ":${PATH:-}:" in
+        *":$1:"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 path_changed=0
-case ":${PATH:-}:" in
-    *":$bin_dir:"*) ;;
-    *)
-        if [ "$modify_path" -eq 1 ] &&
-            [ -n "${HOME:-}" ] &&
-            [ "$cargo_home" = "$HOME/.cargo" ]; then
-            env_file="$HOME/.cargo/env"
-            if [ ! -f "$env_file" ]; then
-                cat >"$env_file" <<'EOF'
+path_ready=0
+
+if path_contains "$bin_dir"; then
+    path_ready=1
+elif [ "$modify_path" -eq 1 ] &&
+    [ -n "${HOME:-}" ] &&
+    [ "$cargo_home" = "$HOME/.cargo" ]; then
+    # A piped installer cannot modify its parent shell's environment. Termux's
+    # PREFIX/bin is already on PATH and writable, so an install link there
+    # makes the command available immediately in every shell.
+    if [ "$is_termux" -eq 1 ] &&
+        [ -n "${PREFIX:-}" ] &&
+        [ -d "$PREFIX/bin" ] &&
+        [ -w "$PREFIX/bin" ] &&
+        path_contains "$PREFIX/bin"; then
+        termux_command="$PREFIX/bin/termleaf"
+        if [ -L "$termux_command" ]; then
+            if command -v readlink >/dev/null 2>&1 &&
+                [ "$(readlink "$termux_command")" = "$bin_dir/termleaf" ]; then
+                path_ready=1
+            else
+                say "Not replacing the existing link at $termux_command."
+            fi
+        elif [ -e "$termux_command" ]; then
+            say "Not replacing the existing file at $termux_command."
+        elif ln -s "$bin_dir/termleaf" "$termux_command"; then
+            path_ready=1
+            say "Linked $termux_command for immediate shell access."
+        fi
+    fi
+
+    if [ "$path_ready" -eq 0 ]; then
+        env_file="$HOME/.cargo/env"
+        if [ ! -f "$env_file" ]; then
+            cat >"$env_file" <<'EOF'
 #!/bin/sh
 case ":${PATH}:" in
     *:"$HOME/.cargo/bin":*) ;;
     *) export PATH="$HOME/.cargo/bin:$PATH" ;;
 esac
 EOF
-            fi
-
-            case "${SHELL:-}" in
-                */zsh) shell_profile="$HOME/.zshrc" ;;
-                */bash) shell_profile="$HOME/.bashrc" ;;
-                *) shell_profile="$HOME/.profile" ;;
-            esac
-
-            # Keep HOME literal so the profile remains portable.
-            # shellcheck disable=SC2016
-            source_line='. "$HOME/.cargo/env"'
-            if [ ! -f "$shell_profile" ] ||
-                ! grep -F "$source_line" "$shell_profile" >/dev/null 2>&1; then
-                printf '\n%s\n' "$source_line" >>"$shell_profile"
-            fi
-            path_changed=1
         fi
-        ;;
-esac
+
+        case "${SHELL:-}" in
+            */fish)
+                fish_env_file="$HOME/.cargo/env.fish"
+                if [ ! -f "$fish_env_file" ]; then
+                    cat >"$fish_env_file" <<'EOF'
+if not contains -- "$HOME/.cargo/bin" $PATH
+    set -gx PATH "$HOME/.cargo/bin" $PATH
+end
+EOF
+                fi
+
+                fish_config_root=${XDG_CONFIG_HOME:-"$HOME/.config"}
+                fish_conf_dir="$fish_config_root/fish/conf.d"
+                fish_conf_file="$fish_conf_dir/termleaf.fish"
+                mkdir -p "$fish_conf_dir"
+                fish_source_line='source "$HOME/.cargo/env.fish"'
+                if [ ! -f "$fish_conf_file" ] ||
+                    ! grep -F "$fish_source_line" "$fish_conf_file" >/dev/null 2>&1; then
+                    printf '\n%s\n' "$fish_source_line" >>"$fish_conf_file"
+                fi
+                ;;
+            *)
+                case "${SHELL:-}" in
+                    */zsh) shell_profile="$HOME/.zshrc" ;;
+                    */bash) shell_profile="$HOME/.bashrc" ;;
+                    *) shell_profile="$HOME/.profile" ;;
+                esac
+
+                # Keep HOME literal so the profile remains portable.
+                # shellcheck disable=SC2016
+                source_line='. "$HOME/.cargo/env"'
+                if [ ! -f "$shell_profile" ] ||
+                    ! grep -F "$source_line" "$shell_profile" >/dev/null 2>&1; then
+                    printf '\n%s\n' "$source_line" >>"$shell_profile"
+                fi
+                ;;
+        esac
+        path_changed=1
+    fi
+fi
 
 say "Installed termleaf in $bin_dir"
 if [ -n "$language" ]; then
     say "Configured Termleaf for $language."
 fi
-if [ "$path_changed" -eq 1 ]; then
+if [ "$path_ready" -eq 1 ]; then
+    say "Run termleaf to get started."
+elif [ "$path_changed" -eq 1 ]; then
     say "Open a new terminal before running termleaf."
 elif ! command -v termleaf >/dev/null 2>&1; then
     say "Add $bin_dir to PATH before running termleaf."

@@ -6,6 +6,7 @@ pub mod language_settings;
 pub mod layout;
 pub mod sound_settings;
 pub mod themes;
+pub mod touch;
 
 pub use file_prompt::{FilePrompt, FilePromptError, FilePromptKind};
 pub use help::HelpOverlay;
@@ -13,6 +14,7 @@ pub use language_settings::LanguageSettings;
 pub use layout::Layout;
 pub use sound_settings::SoundSettings;
 pub use themes::Theme;
+pub use touch::{TouchCommand, TouchContext, TouchPage};
 
 /// Display width of a character in terminal cells (Hangul / CJK are 2).
 pub fn char_width(c: char) -> u16 {

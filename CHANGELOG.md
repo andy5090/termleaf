@@ -7,6 +7,21 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Added a localized, multi-page touch command bar that is enabled by default
+  on Termux, adapts to dialogs and narrow screens, exposes function-key actions
+  to software-keyboard users, and can be toggled with `Ctrl+T`.
+
+### Fixed
+
+- Made new Termux installations immediately discoverable in bash, zsh, fish,
+  and other shells, and added fish-specific PATH configuration for environments
+  where a shell restart is still required.
+- Buffered normal Termux typing bursts and overlapped the short `play-audio`
+  clips with a bounded concurrency limit, preventing missing or unnaturally
+  serialized key sounds.
+
 ## [0.5.1] - 2026-09-01
 
 ### Added

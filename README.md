@@ -51,6 +51,9 @@ on the words, and save without leaving the terminal.
 - **Built-in guidance** — the startup guide explains OS vs. Live Korean input;
   its “Don’t show again” checkbox is optional, and `F1` always reopens the full
   shortcut reference.
+- **Mobile touch controls** — Termux starts with a localized command bar for
+  narrow screens and software keyboards, exposing help, input, file, display,
+  language, sound, and focus controls without function keys.
 - **Optional writing ambience** — choose `classic`, `deep`, or `soft` key
   sounds, with independently configurable delete and return effects. Audio can
   be disabled completely.
@@ -67,7 +70,9 @@ release archive and installs `termleaf` into Cargo's conventional binary
 directory. On Debian and Ubuntu, it also installs any missing ALSA runtime
 packages. This includes the PulseAudio plugin used by WSLg to route sound to
 Windows. On Termux, the installer also installs `play-audio` and Termleaf uses
-it from a non-blocking worker for typewriter sound:
+it from a non-blocking worker for typewriter sound. Termux installs are made
+available immediately through its existing command path, regardless of whether
+the active shell is bash, zsh, or fish:
 
 ```bash
 curl -fsSL https://termleaf.com/install | sh
@@ -87,7 +92,8 @@ curl -fsSL https://termleaf.com/install/ko | sh
 curl -fsSL https://termleaf.com/install/ja | sh
 ```
 
-Open a new terminal if the installer updates your `PATH`, then run:
+On macOS or desktop Linux, open a new terminal if the installer updates your
+`PATH`. Termux can run the command immediately:
 
 ```bash
 termleaf
@@ -120,11 +126,13 @@ To uninstall a curl installation, first print the exact installed paths:
 
 ```bash
 command -v termleaf
+readlink "$(command -v termleaf)" 2>/dev/null || true
 ```
 
-Remove only the file printed by that command. The default path is
-`$HOME/.cargo/bin/termleaf`. Keep Cargo's shared `env`/`env.fish` files and the
-directory's `PATH` entry if other Cargo tools are installed there.
+The default executable is `$HOME/.cargo/bin/termleaf`. Termux also prints its
+immediate-access link at `$PREFIX/bin/termleaf`; remove that link and the
+executable when uninstalling there. Keep Cargo's shared `env`/`env.fish` files
+and the directory's `PATH` entry if other Cargo tools are installed there.
 
 ### Build from source
 
@@ -169,6 +177,7 @@ plugin.
 | `F11` | cycle `classic` / `deep` / `soft` typewriter sound |
 | `Ctrl+O` | open a file (a missing path starts a new file there) |
 | `Ctrl+S` | save; the first save asks for a filename |
+| `Ctrl+T` | toggle the touch command bar and terminal mouse capture |
 | `F12` | save as (reliable in terminals) |
 | `Ctrl+Shift+S` | save as when the terminal preserves the Shift modifier |
 | `Ctrl+Q` / `Ctrl+C` | quit |
@@ -179,6 +188,12 @@ the Windows key. macOS Option is the equivalent of Alt in terminal input;
 Termleaf does not bind Command or the Windows key. Depending on macOS keyboard
 settings, function-key shortcuts may require `Fn` as well—for example,
 `Fn+Shift+F5` for line spacing.
+
+On Termux, touch mode is enabled by default. Tap the segmented bottom bar to
+open files, save, change input mode, and reach display or sound settings. The
+buttons change to relevant actions inside dialogs, such as Previous, Use, and
+Close. The final Tools page contains **Touch off**; `Ctrl+T` can turn the bar
+back on. Disabling it also restores normal terminal mouse selection behavior.
 
 `Enter` plays a typewriter margin bell and carriage-return effect. In the
 `F10` panel, use `↑`/`↓` to select an option, `Space` or `←`/`→` to change it,

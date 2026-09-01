@@ -18,13 +18,15 @@ use std::cell::Cell;
 #[cfg(not(target_os = "android"))]
 use std::cell::RefCell;
 #[cfg(target_os = "android")]
+use std::collections::VecDeque;
+#[cfg(target_os = "android")]
 use std::fs;
 #[cfg(not(target_os = "android"))]
 use std::num::NonZero;
 #[cfg(target_os = "android")]
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "android")]
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 #[cfg(not(target_os = "android"))]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "android")]
@@ -59,6 +61,10 @@ const TYPEWRITER_SOFT_WAVS: [&[u8]; KEY_VARIANT_COUNT] = [
 const BACKSPACE_WAV: &[u8] = include_bytes!("../assets/typewriter-backspace.wav");
 const RETURN_WAV: &[u8] = include_bytes!("../assets/typewriter-return.wav");
 const BACKSPACE_MIN_INTERVAL: Duration = Duration::from_millis(55);
+#[cfg(target_os = "android")]
+const EXTERNAL_SOUND_QUEUE_CAPACITY: usize = 8;
+#[cfg(target_os = "android")]
+const MAX_CONCURRENT_EXTERNAL_SOUNDS: usize = 4;
 #[cfg(not(target_os = "android"))]
 const STREAM_RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -315,22 +321,38 @@ impl ExternalSoundPlayer {
             return None;
         };
 
-        // A rendezvous channel accepts a sound only while the worker is idle.
-        // This deliberately drops rapid repeats instead of playing stale key
-        // sounds after the corresponding input has already appeared.
-        let (sender, receiver) = sync_channel::<PathBuf>(0);
+        // Android's player blocks for the full clip (roughly 230 ms for a key
+        // strike). A small queue and a bounded set of overlapping players keep
+        // normal typing responsive without building a long tail of stale
+        // sounds after an extreme burst.
+        let (sender, receiver) = sync_channel::<PathBuf>(EXTERNAL_SOUND_QUEUE_CAPACITY);
         let worker_directory = directory.clone();
         let worker = thread::Builder::new()
             .name("termleaf-play-audio".into())
             .spawn(move || {
+                let mut children = VecDeque::new();
                 while let Ok(path) = receiver.recv() {
-                    let _ = Command::new(&command)
+                    reap_finished_children(&mut children);
+                    if children.len() >= MAX_CONCURRENT_EXTERNAL_SOUNDS {
+                        if let Some(mut oldest) = children.pop_front() {
+                            let _ = oldest.wait();
+                        }
+                        reap_finished_children(&mut children);
+                    }
+
+                    if let Ok(child) = Command::new(&command)
                         .args(["-s", "media"])
                         .arg(path)
                         .stdin(Stdio::null())
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
-                        .status();
+                        .spawn()
+                    {
+                        children.push_back(child);
+                    }
+                }
+                for mut child in children {
+                    let _ = child.wait();
                 }
                 let _ = fs::remove_dir_all(worker_directory);
             });
@@ -361,6 +383,11 @@ impl ExternalSoundPlayer {
             let _ = sender.try_send(path.to_path_buf());
         }
     }
+}
+
+#[cfg(target_os = "android")]
+fn reap_finished_children(children: &mut VecDeque<Child>) {
+    children.retain_mut(|child| matches!(child.try_wait(), Ok(None)));
 }
 
 #[cfg(target_os = "android")]
@@ -457,6 +484,8 @@ fn decode_pcm_wave(wav: &[u8]) -> Option<(u16, u32, Vec<f32>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "android")]
+    use std::os::unix::fs::PermissionsExt;
     #[cfg(not(target_os = "android"))]
     use std::thread;
 
@@ -679,6 +708,46 @@ mod tests {
         player.play_key("classic", 0);
         drop(player);
         assert!(!directory.exists());
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn termux_audio_keeps_normal_typing_bursts_and_overlaps_decay() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "termleaf-audio-test-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let command = root.join("fake-play-audio");
+        let log = root.join("starts");
+        fs::write(
+            &command,
+            format!(
+                "#!/system/bin/sh\nprintf x >> '{}'\n/system/bin/sleep 1\n",
+                log.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&command, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let player = ExternalSoundPlayer::new_with_command(command)
+            .expect("the external audio worker should start");
+        let start = Instant::now();
+        for variant in 0..KEY_VARIANT_COUNT {
+            player.play_key("classic", variant);
+        }
+        drop(player);
+
+        assert_eq!(fs::read_to_string(log).unwrap(), "xxxx");
+        assert!(
+            start.elapsed() < Duration::from_secs(3),
+            "four one-second clips should overlap instead of playing serially"
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     /// Exercise the real output callback when diagnosing a supported machine.
