@@ -1,6 +1,6 @@
 [package]
 name = "termleaf"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 description = "A distraction-free terminal editor for prose, with cursor-side big type and optional typewriter sound."
 repository = "https://github.com/andy5090/termleaf"

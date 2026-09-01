@@ -7,6 +7,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-02
+
 ### Added
 
 - Added a localized, multi-page touch command bar that is enabled by default

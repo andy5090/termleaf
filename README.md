@@ -12,7 +12,7 @@ the rest of the desktop out of the way.
 
 **[Website](https://termleaf.com) · [Latest release](https://github.com/andy5090/termleaf/releases/latest)**
 
-> Status: v0.5 — a working foundation. Rendering is ANSI-only (via
+> Status: v0.6 — a working foundation. Rendering is ANSI-only (via
 > [`crossterm`](https://crates.io/crates/crossterm)) so it runs on virtually any
 > terminal.
 
