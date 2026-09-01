@@ -1,10 +1,10 @@
 [package]
 name = "termleaf"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
-description = "A distraction-free terminal text editor built for focused writing."
+description = "A distraction-free terminal editor for prose, with cursor-side big type and optional typewriter sound."
 repository = "https://github.com/andy5090/termleaf"
-homepage = "https://github.com/andy5090/termleaf"
+homepage = "https://termleaf.com"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["terminal", "writing", "hangul", "korean", "tui"]
@@ -17,6 +17,8 @@ path = "src/main.rs"
 [dependencies]
 crossterm = "0.28"
 libakaza = { git = "https://github.com/akaza-im/akaza.git", rev = "33e5e422810377190f55551acf2510d8954c29d5" }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
 rodio = { version = "0.22.2", default-features = false, features = ["playback"] }
 
 [patch.crates-io]

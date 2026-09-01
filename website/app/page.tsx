@@ -315,7 +315,7 @@ export default async function Home() {
         <div className="hero-copy">
           <p className="eyebrow">
             <span className="status-dot" aria-hidden="true" />
-            v0.5.0 · macOS &amp; Linux
+            v0.5.1 · macOS, Linux &amp; Termux
           </p>
           <h1>
             {copy.hero.headline}

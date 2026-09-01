@@ -25,9 +25,9 @@ Termleaf follows Semantic Versioning:
 5. Commit and push the release preparation, then confirm the normal CI passed.
 
 To conserve GitHub Actions usage, normal CI runs once per pull request and
-cancels superseded runs. The i686 compatibility build and cargo-dist platform
-matrix run only for version-tag releases; validate i686-sensitive changes
-locally before tagging when possible.
+cancels superseded runs. The i686 and Android ARM64 compatibility builds and
+cargo-dist platform matrix run only for version-tag releases; validate
+target-sensitive changes locally before tagging when possible.
 
 ## Publish
 
@@ -38,10 +38,11 @@ git tag -a v0.2.2 -m "Termleaf 0.2.2"
 git push origin v0.2.2
 ```
 
-The generated Release workflow builds macOS, x86_64 Linux, and i686 Linux
-archives, checksums, the common shell installer, and Korean/Japanese language
-packs, then publishes them to GitHub Releases. The i686 archive is supplied by
-the custom reusable workflow at `.github/workflows/build-i686.yml`.
+The generated Release workflow builds macOS, x86_64 Linux, i686 Linux, and
+Android ARM64 archives, checksums, the common shell installer, and
+Korean/Japanese language packs, then publishes them to GitHub Releases. The
+i686 and Android archives are supplied by custom reusable workflows in
+`.github/workflows`.
 
 After it finishes, verify:
 

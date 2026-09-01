@@ -1,18 +1,41 @@
-//! Low-latency, non-blocking typewriter audio.
+//! Non-blocking typewriter audio.
 //!
 //! The output stream is opened once at startup and kept alive for the whole
 //! session. Keystrokes add an in-memory PCM buffer directly to Rodio's mixer,
-//! avoiding the process startup and file decoding delay of command-line
-//! players.
+//! avoiding process startup on desktop systems. Termux uses its `play-audio`
+//! command on a dedicated worker because terminal processes have no Android
+//! JVM context for CPAL's normal device discovery.
 
+#[cfg(not(target_os = "android"))]
 use rodio::buffer::SamplesBuffer;
+#[cfg(not(target_os = "android"))]
 use rodio::cpal::StreamError;
-use rodio::{DeviceSinkBuilder, MixerDeviceSink};
-use std::cell::{Cell, RefCell};
+#[cfg(not(target_os = "android"))]
+use rodio::DeviceSinkBuilder;
+#[cfg(not(target_os = "android"))]
+use rodio::MixerDeviceSink;
+use std::cell::Cell;
+#[cfg(not(target_os = "android"))]
+use std::cell::RefCell;
+#[cfg(target_os = "android")]
+use std::fs;
+#[cfg(not(target_os = "android"))]
 use std::num::NonZero;
+#[cfg(target_os = "android")]
+use std::path::{Path, PathBuf};
+#[cfg(target_os = "android")]
+use std::process::{Command, Stdio};
+#[cfg(not(target_os = "android"))]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_os = "android")]
+use std::sync::mpsc::{sync_channel, SyncSender};
+#[cfg(not(target_os = "android"))]
 use std::sync::Arc;
+#[cfg(target_os = "android")]
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+#[cfg(target_os = "android")]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const KEY_VARIANT_COUNT: usize = 4;
 const TYPEWRITER_WAVS: [&[u8]; KEY_VARIANT_COUNT] = [
@@ -36,51 +59,76 @@ const TYPEWRITER_SOFT_WAVS: [&[u8]; KEY_VARIANT_COUNT] = [
 const BACKSPACE_WAV: &[u8] = include_bytes!("../assets/typewriter-backspace.wav");
 const RETURN_WAV: &[u8] = include_bytes!("../assets/typewriter-return.wav");
 const BACKSPACE_MIN_INTERVAL: Duration = Duration::from_millis(55);
+#[cfg(not(target_os = "android"))]
 const STREAM_RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
+#[cfg(not(target_os = "android"))]
 struct Clip {
     samples: Vec<f32>,
     channels: u16,
     sample_rate: u32,
 }
 
-/// Best-effort typewriter sound player backed by a persistent audio stream.
+/// Best-effort typewriter sound player backed by a mixer or Termux worker.
 pub struct SoundPlayer {
+    #[cfg(not(target_os = "android"))]
     stream: RefCell<Option<MixerDeviceSink>>,
+    #[cfg(not(target_os = "android"))]
     stream_healthy: Arc<AtomicBool>,
+    #[cfg(not(target_os = "android"))]
     classic_keys: [Clip; KEY_VARIANT_COUNT],
+    #[cfg(not(target_os = "android"))]
     deep_keys: [Clip; KEY_VARIANT_COUNT],
+    #[cfg(not(target_os = "android"))]
     soft_keys: [Clip; KEY_VARIANT_COUNT],
+    #[cfg(not(target_os = "android"))]
     backspace: Clip,
+    #[cfg(not(target_os = "android"))]
     carriage_return: Clip,
+    #[cfg(target_os = "android")]
+    external: Option<ExternalSoundPlayer>,
     key_variant_state: Cell<u32>,
     last_key_variant: Cell<Option<usize>>,
     last_backspace: Cell<Option<Instant>>,
+    #[cfg(not(target_os = "android"))]
     last_stream_retry: Cell<Option<Instant>>,
 }
 
 impl SoundPlayer {
     pub fn new() -> Self {
+        #[cfg(not(target_os = "android"))]
         let stream_healthy = Arc::new(AtomicBool::new(true));
+        #[cfg(not(target_os = "android"))]
         let stream = open_stream(Arc::clone(&stream_healthy));
 
         Self {
+            #[cfg(not(target_os = "android"))]
             stream: RefCell::new(stream),
+            #[cfg(not(target_os = "android"))]
             stream_healthy,
+            #[cfg(not(target_os = "android"))]
             classic_keys: TYPEWRITER_WAVS.map(Clip::decode),
+            #[cfg(not(target_os = "android"))]
             deep_keys: TYPEWRITER_DEEP_WAVS.map(Clip::decode),
+            #[cfg(not(target_os = "android"))]
             soft_keys: TYPEWRITER_SOFT_WAVS.map(Clip::decode),
+            #[cfg(not(target_os = "android"))]
             backspace: Clip::decode(BACKSPACE_WAV),
+            #[cfg(not(target_os = "android"))]
             carriage_return: Clip::decode(RETURN_WAV),
+            #[cfg(target_os = "android")]
+            external: ExternalSoundPlayer::new(),
             key_variant_state: Cell::new(0x7A_DA_C0_DE),
             last_key_variant: Cell::new(None),
             last_backspace: Cell::new(None),
+            #[cfg(not(target_os = "android"))]
             last_stream_retry: Cell::new(None),
         }
     }
 
     /// Mix one printing-key strike immediately.
     pub fn play_key(&self, profile: &str) {
+        #[cfg(not(target_os = "android"))]
         let clips = match profile {
             "deep" => &self.deep_keys,
             "soft" => &self.soft_keys,
@@ -90,6 +138,12 @@ impl SoundPlayer {
             next_key_variant(self.key_variant_state.get(), self.last_key_variant.get());
         self.key_variant_state.set(state);
         self.last_key_variant.set(Some(variant));
+
+        #[cfg(target_os = "android")]
+        if let Some(external) = &self.external {
+            external.play_key(profile, variant);
+        }
+        #[cfg(not(target_os = "android"))]
         self.play(&clips[variant]);
     }
 
@@ -100,16 +154,28 @@ impl SoundPlayer {
             return;
         }
         self.last_backspace.set(Some(now));
+
+        #[cfg(target_os = "android")]
+        if let Some(external) = &self.external {
+            external.play(&external.paths.backspace);
+        }
+        #[cfg(not(target_os = "android"))]
         self.play(&self.backspace);
     }
 
     /// Mix the margin bell and carriage-return travel effect.
     pub fn play_return(&self) {
+        #[cfg(target_os = "android")]
+        if let Some(external) = &self.external {
+            external.play(&external.paths.carriage_return);
+        }
+        #[cfg(not(target_os = "android"))]
         self.play(&self.carriage_return);
     }
 
     /// Rodio performs playback on its existing audio thread, so this call does
     /// not block the editor event loop.
+    #[cfg(not(target_os = "android"))]
     fn play(&self, clip: &Clip) {
         self.recover_stream_if_needed();
         if clip.samples.is_empty() {
@@ -132,6 +198,7 @@ impl SoundPlayer {
         ));
     }
 
+    #[cfg(not(target_os = "android"))]
     fn recover_stream_if_needed(&self) {
         let healthy = self.stream_healthy.load(Ordering::Acquire);
         if healthy && self.stream.borrow().is_some() {
@@ -153,6 +220,7 @@ impl SoundPlayer {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn open_stream(stream_healthy: Arc<AtomicBool>) -> Option<MixerDeviceSink> {
     let callback_state = Arc::clone(&stream_healthy);
     let builder = DeviceSinkBuilder::from_default_device().ok()?;
@@ -173,6 +241,7 @@ fn open_stream(stream_healthy: Arc<AtomicBool>) -> Option<MixerDeviceSink> {
         })
 }
 
+#[cfg(not(target_os = "android"))]
 fn stream_error_requires_rebuild(error: &StreamError) -> bool {
     !matches!(error, StreamError::BufferUnderrun)
 }
@@ -190,10 +259,12 @@ fn next_key_variant(state: u32, last: Option<usize>) -> (u32, usize) {
     (state, variant)
 }
 
+#[cfg(not(target_os = "android"))]
 fn stream_retry_allowed(last: Option<Instant>, now: Instant) -> bool {
     last.is_none_or(|last| now.duration_since(last) >= STREAM_RETRY_INTERVAL)
 }
 
+#[cfg(not(target_os = "android"))]
 impl Clip {
     fn decode(wav: &[u8]) -> Self {
         let (channels, sample_rate, samples) =
@@ -206,7 +277,148 @@ impl Clip {
     }
 }
 
+#[cfg(target_os = "android")]
+struct ExternalClipPaths {
+    classic_keys: [PathBuf; KEY_VARIANT_COUNT],
+    deep_keys: [PathBuf; KEY_VARIANT_COUNT],
+    soft_keys: [PathBuf; KEY_VARIANT_COUNT],
+    backspace: PathBuf,
+    carriage_return: PathBuf,
+}
+
+#[cfg(target_os = "android")]
+struct ExternalSoundPlayer {
+    sender: Option<SyncSender<PathBuf>>,
+    worker: Option<JoinHandle<()>>,
+    paths: ExternalClipPaths,
+    directory: PathBuf,
+}
+
+#[cfg(target_os = "android")]
+impl ExternalSoundPlayer {
+    fn new() -> Option<Self> {
+        Self::new_with_command(find_in_path("play-audio")?)
+    }
+
+    fn new_with_command(command: PathBuf) -> Option<Self> {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let directory =
+            std::env::temp_dir().join(format!("termleaf-audio-{}-{nonce}", std::process::id()));
+        fs::create_dir(&directory).ok()?;
+
+        let paths = write_external_clips(&directory);
+        let Some(paths) = paths else {
+            let _ = fs::remove_dir_all(&directory);
+            return None;
+        };
+
+        // A rendezvous channel accepts a sound only while the worker is idle.
+        // This deliberately drops rapid repeats instead of playing stale key
+        // sounds after the corresponding input has already appeared.
+        let (sender, receiver) = sync_channel::<PathBuf>(0);
+        let worker_directory = directory.clone();
+        let worker = thread::Builder::new()
+            .name("termleaf-play-audio".into())
+            .spawn(move || {
+                while let Ok(path) = receiver.recv() {
+                    let _ = Command::new(&command)
+                        .args(["-s", "media"])
+                        .arg(path)
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status();
+                }
+                let _ = fs::remove_dir_all(worker_directory);
+            });
+        let Ok(worker) = worker else {
+            let _ = fs::remove_dir_all(&directory);
+            return None;
+        };
+
+        Some(Self {
+            sender: Some(sender),
+            worker: Some(worker),
+            paths,
+            directory,
+        })
+    }
+
+    fn play_key(&self, profile: &str, variant: usize) {
+        let path = match profile {
+            "deep" => &self.paths.deep_keys[variant],
+            "soft" => &self.paths.soft_keys[variant],
+            _ => &self.paths.classic_keys[variant],
+        };
+        self.play(path);
+    }
+
+    fn play(&self, path: &Path) {
+        if let Some(sender) = &self.sender {
+            let _ = sender.try_send(path.to_path_buf());
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+impl Drop for ExternalSoundPlayer {
+    fn drop(&mut self) {
+        self.sender.take();
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+        // The worker normally removes this. Also clean it here if the worker
+        // exited before reaching its final cleanup operation.
+        let _ = fs::remove_dir_all(&self.directory);
+    }
+}
+
+#[cfg(target_os = "android")]
+fn write_external_clips(directory: &Path) -> Option<ExternalClipPaths> {
+    fn write_group<const N: usize>(
+        directory: &Path,
+        prefix: &str,
+        wavs: [&[u8]; N],
+    ) -> Option<[PathBuf; N]> {
+        let paths =
+            std::array::from_fn(|index| directory.join(format!("{prefix}-{}.wav", index + 1)));
+        for (path, wav) in paths.iter().zip(wavs) {
+            fs::write(path, wav).ok()?;
+        }
+        Some(paths)
+    }
+
+    let classic_keys = write_group(directory, "classic", TYPEWRITER_WAVS)?;
+    let deep_keys = write_group(directory, "deep", TYPEWRITER_DEEP_WAVS)?;
+    let soft_keys = write_group(directory, "soft", TYPEWRITER_SOFT_WAVS)?;
+    let backspace = directory.join("backspace.wav");
+    let carriage_return = directory.join("return.wav");
+    fs::write(&backspace, BACKSPACE_WAV).ok()?;
+    fs::write(&carriage_return, RETURN_WAV).ok()?;
+
+    Some(ExternalClipPaths {
+        classic_keys,
+        deep_keys,
+        soft_keys,
+        backspace,
+        carriage_return,
+    })
+}
+
+#[cfg(target_os = "android")]
+fn find_in_path(command: &str) -> Option<PathBuf> {
+    std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .map(|directory| directory.join(command))
+        .find(|candidate| candidate.is_file())
+}
+
 /// Decode the generator's standard 16-bit little-endian PCM WAV.
+#[cfg(any(test, not(target_os = "android")))]
 fn decode_pcm_wave(wav: &[u8]) -> Option<(u16, u32, Vec<f32>)> {
     if wav.len() < 44 || &wav[0..4] != b"RIFF" || &wav[8..12] != b"WAVE" {
         return None;
@@ -244,6 +456,7 @@ fn decode_pcm_wave(wav: &[u8]) -> Option<(u16, u32, Vec<f32>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_os = "android"))]
     use std::thread;
 
     fn embedded_wavs() -> Vec<&'static [u8]> {
@@ -416,6 +629,7 @@ mod tests {
         ));
     }
 
+    #[cfg(not(target_os = "android"))]
     #[test]
     fn backend_failures_require_a_rebuild_but_transient_underruns_do_not() {
         assert!(!stream_error_requires_rebuild(&StreamError::BufferUnderrun));
@@ -434,6 +648,7 @@ mod tests {
         ));
     }
 
+    #[cfg(not(target_os = "android"))]
     #[test]
     fn failed_stream_retries_are_rate_limited() {
         let start = Instant::now();
@@ -448,8 +663,26 @@ mod tests {
         ));
     }
 
+    #[cfg(target_os = "android")]
+    #[test]
+    fn terminal_android_process_prepares_external_audio() {
+        let player = ExternalSoundPlayer::new_with_command(PathBuf::from("/system/bin/true"))
+            .expect("the external audio worker should start");
+        let directory = player.directory.clone();
+        assert!(player.paths.classic_keys.iter().all(|path| path.is_file()));
+        assert!(player.paths.deep_keys.iter().all(|path| path.is_file()));
+        assert!(player.paths.soft_keys.iter().all(|path| path.is_file()));
+        assert!(player.paths.backspace.is_file());
+        assert!(player.paths.carriage_return.is_file());
+
+        player.play_key("classic", 0);
+        drop(player);
+        assert!(!directory.exists());
+    }
+
     /// Exercise the real output callback when diagnosing a supported machine.
     /// This stays ignored because CI and cross-build hosts may have no speaker.
+    #[cfg(not(target_os = "android"))]
     #[test]
     #[ignore = "requires a working default audio output device"]
     fn hardware_audio_callback_stays_alive() {

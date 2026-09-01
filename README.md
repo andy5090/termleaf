@@ -1,6 +1,7 @@
 # Termleaf
 
-A distraction-free **terminal text editor built for focused writing**.
+A distraction-free **terminal editor for prose**, with cursor-side big type and
+optional typewriter sound.
 Termleaf keeps files, shortcuts, and the writing surface close while leaving
 the rest of the desktop out of the way.
 
@@ -9,7 +10,9 @@ the rest of the desktop out of the way.
 [![CI](https://github.com/andy5090/termleaf/actions/workflows/ci.yml/badge.svg)](https://github.com/andy5090/termleaf/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-> Status: v0.3 — a working foundation. Rendering is ANSI-only (via
+**[Website](https://termleaf.com) · [Latest release](https://github.com/andy5090/termleaf/releases/latest)**
+
+> Status: v0.5 — a working foundation. Rendering is ANSI-only (via
 > [`crossterm`](https://crates.io/crates/crossterm)) so it runs on virtually any
 > terminal.
 
@@ -56,16 +59,24 @@ on the words, and save without leaving the terminal.
 
 ## Install
 
-### macOS and Linux (recommended)
+### macOS, Linux, and Termux (recommended)
 
 The installer detects Apple Silicon, Intel macOS, x86_64 Linux, or 32-bit x86
-Linux (`i686`), verifies the release archive, and installs `termleaf` into
-Cargo's conventional binary directory. On Debian and Ubuntu, it also installs
-any missing ALSA runtime packages. This includes the PulseAudio plugin used by
-WSLg to route sound to Windows:
+Linux (`i686`), as well as ARM64 Android devices running Termux. It verifies the
+release archive and installs `termleaf` into Cargo's conventional binary
+directory. On Debian and Ubuntu, it also installs any missing ALSA runtime
+packages. This includes the PulseAudio plugin used by WSLg to route sound to
+Windows. On Termux, the installer also installs `play-audio` and Termleaf uses
+it from a non-blocking worker for typewriter sound:
 
 ```bash
 curl -fsSL https://termleaf.com/install | sh
+```
+
+When building from source in Termux instead, install the audio helper once:
+
+```bash
+pkg install play-audio
 ```
 
 The localized website installers add the matching language pack and select it

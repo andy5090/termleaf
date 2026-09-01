@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install the latest Termleaf release on supported macOS and Linux systems.
+# Install the latest Termleaf release on supported macOS, Linux, and Termux systems.
 
 set -eu
 
@@ -52,6 +52,25 @@ install_linux_audio_dependencies() {
         # splitting passes each missing package as a separate argument.
         # shellcheck disable=SC2086
         run_as_root apt-get install --yes $missing_packages
+    fi
+}
+
+install_termux_audio_dependency() {
+    if command -v play-audio >/dev/null 2>&1; then
+        return
+    fi
+
+    say "Installing the Termux audio player: play-audio"
+    if command -v pkg >/dev/null 2>&1; then
+        if ! pkg install -y play-audio; then
+            say "Could not install play-audio; Termleaf will continue without sound."
+        fi
+    elif command -v apt-get >/dev/null 2>&1; then
+        if ! apt-get install --yes play-audio; then
+            say "Could not install play-audio; Termleaf will continue without sound."
+        fi
+    else
+        say "Install the play-audio package to enable Termleaf sound."
     fi
 }
 
@@ -122,28 +141,41 @@ case "$os_name" in
         esac
         ;;
     Linux)
-        bitness=$(getconf LONG_BIT 2>/dev/null || printf '')
-        case "$cpu_name" in
-            i386 | i486 | i586 | i686 | i786 | x86)
-                target="i686-unknown-linux-gnu"
-                ;;
-            x86_64 | x86-64 | x64 | amd64)
-                if [ "$bitness" = "32" ]; then
+        operating_environment=$(uname -o 2>/dev/null || printf '')
+        if [ "$operating_environment" = "Android" ]; then
+            case "$cpu_name" in
+                arm64 | aarch64)
+                    target="aarch64-linux-android"
+                    ;;
+                *)
+                    die "unsupported Android architecture: $cpu_name"
+                    ;;
+            esac
+            install_termux_audio_dependency
+        else
+            bitness=$(getconf LONG_BIT 2>/dev/null || printf '')
+            case "$cpu_name" in
+                i386 | i486 | i586 | i686 | i786 | x86)
                     target="i686-unknown-linux-gnu"
-                else
-                    target="x86_64-unknown-linux-gnu"
-                fi
-                ;;
-            *)
-                die "unsupported Linux architecture: $cpu_name"
-                ;;
-        esac
+                    ;;
+                x86_64 | x86-64 | x64 | amd64)
+                    if [ "$bitness" = "32" ]; then
+                        target="i686-unknown-linux-gnu"
+                    else
+                        target="x86_64-unknown-linux-gnu"
+                    fi
+                    ;;
+                *)
+                    die "unsupported Linux architecture: $cpu_name"
+                    ;;
+            esac
 
-        if ldd --version 2>&1 | grep -q 'musl'; then
-            die "musl Linux is not supported by the prebuilt installer"
+            if ldd --version 2>&1 | grep -q 'musl'; then
+                die "musl Linux is not supported by the prebuilt installer"
+            fi
+
+            install_linux_audio_dependencies
         fi
-
-        install_linux_audio_dependencies
         ;;
     *)
         die "unsupported operating system: $os_name"

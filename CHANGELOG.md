@@ -7,6 +7,19 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-01
+
+### Added
+
+- Added a prebuilt ARM64 Android archive and Termux detection to the release
+  installer.
+
+### Fixed
+
+- Prevented Termux sessions from panicking while initializing Android's
+  application-only audio context and added non-blocking sound playback through
+  Termux's `play-audio` package.
+
 ## [0.5.0] - 2026-08-30
 
 ### Added
@@ -197,7 +210,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/andy5090/termleaf/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/andy5090/termleaf/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/andy5090/termleaf/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/andy5090/termleaf/compare/v0.3.6...v0.3.7

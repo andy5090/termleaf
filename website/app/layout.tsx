@@ -38,7 +38,8 @@ export async function generateMetadata(): Promise<Metadata> {
         }
     : {
         title: "Termleaf — Write. Nothing else.",
-        description: "A distraction-free terminal text editor built for focused writing.",
+        description:
+          "A distraction-free terminal editor for prose, with cursor-side big type and optional typewriter sound.",
         ogLocale: "en_US",
         alternateLocale: ["ko_KR", "ja_JP"],
         image: "/og-en.png",

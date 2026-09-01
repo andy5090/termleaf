@@ -1,0 +1,69 @@
+name: Build Android aarch64
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: false
+        type: string
+
+jobs:
+  build-android-aarch64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64-linux-android
+
+      - name: Configure Android NDK linker
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_root=${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}}
+          test -n "$ndk_root"
+          toolchain="$ndk_root/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          linker="$toolchain/aarch64-linux-android21-clang"
+          test -x "$linker"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$linker" >> "$GITHUB_ENV"
+
+      - name: Build Android ARM64 release
+        run: cargo build --locked --profile dist --target aarch64-linux-android --bin termleaf
+
+      - name: Verify and package Android ARM64 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=aarch64-linux-android
+          archive_root="target/distrib/termleaf-${target}"
+          mkdir -p "$archive_root"
+          cp "target/${target}/dist/termleaf" "$archive_root/"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "$archive_root/"
+
+          file "$archive_root/termleaf" | grep -F "ELF 64-bit"
+          readelf -l "$archive_root/termleaf" | grep -F "/system/bin/linker64"
+
+          tar -C target/distrib -cJf "${archive_root}.tar.xz" "termleaf-${target}"
+          (
+            cd target/distrib
+            sha256sum "termleaf-${target}.tar.xz" >"termleaf-${target}.tar.xz.sha256"
+          )
+
+      - name: Upload Android ARM64 artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-build-android-aarch64
+          path: |
+            target/distrib/termleaf-aarch64-linux-android.tar.xz
+            target/distrib/termleaf-aarch64-linux-android.tar.xz.sha256

@@ -14,7 +14,7 @@ targets = [
     "x86_64-apple-darwin",
     "x86_64-unknown-linux-gnu",
 ]
-local-artifacts-jobs = ["./build-i686"]
+local-artifacts-jobs = ["./build-i686", "./build-android-aarch64"]
 install-path = "CARGO_HOME"
 hosting = "github"
 # `termleaf update` uses the installed executable version and the shared release
