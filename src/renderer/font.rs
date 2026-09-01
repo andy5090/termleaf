@@ -64,8 +64,10 @@ fn decode_glyph(index: usize) -> Glyph {
     let start = index * BYTES_PER_GLYPH;
     let width = FONT_DATA[start] as usize;
     let rows = FONT_DATA[start + 1..start + BYTES_PER_GLYPH]
-        .chunks_exact(2)
-        .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|bytes| u16::from_be_bytes(*bytes))
         .collect();
     Glyph {
         width,

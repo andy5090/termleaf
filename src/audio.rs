@@ -442,13 +442,14 @@ fn decode_pcm_wave(wav: &[u8]) -> Option<(u16, u32, Vec<f32>)> {
             .ok()?,
     ) as usize;
     let data = wav.get(samples_position..samples_position.checked_add(data_len)?)?;
-    if data.len() % 2 != 0 {
+    let (sample_bytes, remainder) = data.as_chunks::<2>();
+    if !remainder.is_empty() {
         return None;
     }
 
-    let samples = data
-        .chunks_exact(2)
-        .map(|bytes| i16::from_le_bytes([bytes[0], bytes[1]]) as f32 / i16::MAX as f32)
+    let samples = sample_bytes
+        .iter()
+        .map(|bytes| i16::from_le_bytes(*bytes) as f32 / i16::MAX as f32)
         .collect();
     Some((channels, sample_rate, samples))
 }

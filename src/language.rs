@@ -293,7 +293,7 @@ fn parse_glyphs(bytes: &[u8]) -> Result<BTreeMap<char, PackedGlyph>, LanguageErr
     }
 
     let mut glyphs = BTreeMap::new();
-    for record in bytes[9..].chunks_exact(GLYPH_RECORD_SIZE) {
+    for record in bytes[9..].as_chunks::<GLYPH_RECORD_SIZE>().0 {
         let codepoint = u32::from_be_bytes(record[..4].try_into().expect("fixed codepoint width"));
         let character = char::from_u32(codepoint)
             .ok_or_else(|| LanguageError(format!("invalid glyph codepoint U+{codepoint:04X}")))?;
@@ -302,8 +302,8 @@ fn parse_glyphs(bytes: &[u8]) -> Result<BTreeMap<char, PackedGlyph>, LanguageErr
             return Err(LanguageError(format!("invalid glyph width {width}")));
         }
         let mut rows = [0; GLYPH_ROWS];
-        for (index, row) in record[5..].chunks_exact(2).enumerate() {
-            rows[index] = u16::from_be_bytes([row[0], row[1]]);
+        for (index, row) in record[5..].as_chunks::<2>().0.iter().enumerate() {
+            rows[index] = u16::from_be_bytes(*row);
         }
         glyphs.insert(character, PackedGlyph { width, rows });
     }
