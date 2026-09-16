@@ -100,6 +100,12 @@ pub struct SoundPlayer {
     last_stream_retry: Cell<Option<Instant>>,
 }
 
+impl Default for SoundPlayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SoundPlayer {
     pub fn new() -> Self {
         #[cfg(not(target_os = "android"))]

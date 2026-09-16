@@ -3,7 +3,8 @@
 ## Galmuri9 2.40.4
 
 Termleaf includes a converted English core and optional Korean/Japanese glyph
-packs. Together they cover printable ASCII, Hangul Compatibility Jamo, all
+packs. The mobile app bundles the same glyphs as generated JSON and includes
+the full OFL text in Help. Together they cover printable ASCII, Hangul Compatibility Jamo, all
 11,172 precomposed Hangul syllables, kana, fullwidth forms, CJK punctuation,
 and the CJK ideographs available in Galmuri9.
 

@@ -4,14 +4,9 @@
 //! jamo-by-jamo composition. Rendering is ANSI-only (via crossterm) for broad
 //! terminal compatibility.
 
-mod audio;
-mod config;
-mod editor;
-mod input;
-mod language;
-mod renderer;
-mod ui;
 mod update;
+
+use termleaf::{audio, config, editor, input, language, renderer, ui};
 
 use std::ffi::OsString;
 use std::io;

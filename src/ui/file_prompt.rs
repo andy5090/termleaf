@@ -78,6 +78,15 @@ impl FilePrompt {
         }
     }
 
+    /// Replace path input from a GUI control and refresh the same candidates
+    /// used by the terminal prompt.
+    pub fn set_input(&mut self, input: String) {
+        self.input = input;
+        self.error = None;
+        self.selected = 0;
+        self.refresh_candidates();
+    }
+
     pub fn push(&mut self, character: char) {
         self.input.push(character);
         self.error = None;
@@ -348,6 +357,24 @@ mod tests {
         prompt.complete_selected();
         assert!(prompt.input.ends_with("alpha.txt"));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn replacing_gui_path_input_refreshes_candidates_and_selection() {
+        let root = temporary_directory();
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("draft.md"), "draft").unwrap();
+        fs::write(root.join("other.md"), "other").unwrap();
+        let mut prompt = FilePrompt::open(Some(&root.join("current.md")));
+        prompt.select_next();
+        prompt.error = Some(FilePromptError::EmptyPath);
+
+        prompt.set_input(root.join("dra").to_string_lossy().into_owned());
+        assert_eq!(prompt.selected, 0);
+        assert_eq!(prompt.error, None);
+        assert_eq!(prompt.candidates.len(), 1);
+        assert_eq!(prompt.candidates[0].path, root.join("draft.md"));
         fs::remove_dir_all(root).unwrap();
     }
 }

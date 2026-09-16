@@ -84,9 +84,10 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Path to the config file (`$HOME/.config/termleaf/config`).
+    /// Path to the config file (`$HOME/.config/termleaf/config`), using
+    /// `USERPROFILE` when Windows does not provide `HOME`.
     pub fn path() -> Option<PathBuf> {
-        let home = std::env::var_os("HOME")?;
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
         Some(
             PathBuf::from(home)
                 .join(".config")

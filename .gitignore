@@ -5,3 +5,15 @@ termleaf-language-*.tar.xz.sha256
 **/*.rs.bk
 *.swp
 untitled.txt
+
+# Desktop/mobile app development outputs (website remains independent).
+/node_modules/
+/apps/*/node_modules/
+/packages/*/node_modules/
+/apps/*/dist/
+/apps/*/.expo/
+/apps/mobile/android/
+/apps/mobile/ios/
+/apps/desktop/src-tauri/target/
+/output/playwright/
+/.playwright-cli/

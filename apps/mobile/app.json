@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Termleaf",
+    "slug": "termleaf",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.termleaf.mobile",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.termleaf.mobile"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

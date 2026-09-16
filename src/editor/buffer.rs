@@ -23,6 +23,8 @@ impl Buffer {
     }
 
     /// Build a buffer from raw text (splitting on `\n`).
+    // Preserve the shared editor's infallible constructor API.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(text: &str) -> Self {
         let mut lines: Vec<Vec<char>> = text.split('\n').map(|l| l.chars().collect()).collect();
         if lines.is_empty() {

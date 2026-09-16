@@ -16,6 +16,12 @@ the rest of the desktop out of the way.
 > [`crossterm`](https://crates.io/crates/crossterm)) so it runs on virtually any
 > terminal.
 
+The desktop GUI port (Tauri) shares the terminal's Rust editor, input engines,
+pixel glyphs, themes and sounds. Windows, macOS and Linux are desktop targets;
+the experimental Expo mobile app for Android and iOS follows the same pixel
+writing layout, with a document drawer and local autosave. See the
+[app development guide](docs/apps.md) for implementation and verification status.
+
 ## Why
 
 General-purpose editors are excellent at managing code and complex projects,

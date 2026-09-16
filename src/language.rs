@@ -244,10 +244,12 @@ fn data_dir() -> PathBuf {
     if let Some(path) = env::var_os("XDG_DATA_HOME") {
         return PathBuf::from(path).join("termleaf");
     }
-    env::var_os("HOME").map_or_else(
-        || PathBuf::from(".termleaf-data"),
-        |home| PathBuf::from(home).join(".local/share/termleaf"),
-    )
+    env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .map_or_else(
+            || PathBuf::from(".termleaf-data"),
+            |home| PathBuf::from(home).join(".local/share/termleaf"),
+        )
 }
 
 fn load_pack(path: &Path, expected: Language) -> Result<LanguagePack, LanguageError> {
@@ -357,15 +359,8 @@ fn verify_checksum(archive: &Path, checksum: &Path) -> Result<(), LanguageError>
         .next()
         .ok_or_else(|| LanguageError("language checksum is empty".into()))?
         .to_owned();
-    let output = if Command::new("sha256sum").arg(archive).output().is_ok() {
-        Command::new("sha256sum").arg(archive).output()
-    } else {
-        Command::new("shasum")
-            .args(["-a", "256"])
-            .arg(archive)
-            .output()
-    }
-    .map_err(|error| LanguageError(format!("cannot calculate language checksum: {error}")))?;
+    let output = checksum_output(archive)
+        .map_err(|error| LanguageError(format!("cannot calculate language checksum: {error}")))?;
     if !output.status.success() {
         return Err(LanguageError("language checksum command failed".into()));
     }
@@ -374,12 +369,40 @@ fn verify_checksum(archive: &Path, checksum: &Path) -> Result<(), LanguageError>
         .next()
         .unwrap_or_default()
         .to_owned();
-    if actual != expected {
+    if !actual.eq_ignore_ascii_case(&expected) {
         return Err(LanguageError(
             "language pack checksum verification failed".into(),
         ));
     }
     Ok(())
+}
+
+#[cfg(windows)]
+fn checksum_output(archive: &Path) -> std::io::Result<std::process::Output> {
+    // Keep paths as data: -LiteralPath reads this environment variable rather
+    // than interpolating an arbitrary filename into PowerShell source.
+    Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "(Get-FileHash -LiteralPath $env:TERMLEAF_CHECKSUM_FILE -Algorithm SHA256 -ErrorAction Stop).Hash",
+        ])
+        .env("TERMLEAF_CHECKSUM_FILE", archive)
+        .output()
+}
+
+#[cfg(not(windows))]
+fn checksum_output(archive: &Path) -> std::io::Result<std::process::Output> {
+    Command::new("sha256sum")
+        .arg(archive)
+        .output()
+        .or_else(|_| {
+            Command::new("shasum")
+                .args(["-a", "256"])
+                .arg(archive)
+                .output()
+        })
 }
 
 fn run_command(command: &mut Command, action: &str) -> Result<(), LanguageError> {
@@ -405,6 +428,24 @@ mod tests {
 
     fn unique_data_dir(name: &str) -> PathBuf {
         env::temp_dir().join(format!("termleaf-language-{name}-{}", nonce()))
+    }
+
+    #[test]
+    fn checksum_accepts_valid_archive_and_rejects_changed_content() {
+        let root = unique_data_dir("checksum");
+        fs::create_dir_all(&root).unwrap();
+        let archive = root.join("pack [1].tar.xz");
+        let checksum = root.join("pack.sha256");
+        fs::write(&archive, "abc").unwrap();
+        fs::write(
+            &checksum,
+            "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD  pack [1].tar.xz\n",
+        )
+        .unwrap();
+        verify_checksum(&archive, &checksum).unwrap();
+        fs::write(&archive, "changed").unwrap();
+        assert!(verify_checksum(&archive, &checksum).is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
