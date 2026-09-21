@@ -647,6 +647,7 @@ impl Engine {
 enum EditorCommand {
     Snapshot,
     New,
+    Import(String),
     Switch(u64),
     Sync(String, usize),
     Select(usize),
@@ -719,6 +720,15 @@ fn apply_command(engine: &mut Engine, command: EditorCommand) -> Result<(), Stri
             engine.new_document();
             Ok(())
         }
+        EditorCommand::Import(text) => {
+            if text.len() > 2 * 1024 * 1024 {
+                return Err("Cloud document exceeds the 2 MiB limit".into());
+            }
+            engine.new_document();
+            let cursor = text.encode_utf16().count();
+            engine.sync(text, cursor);
+            Ok(())
+        }
         EditorCommand::Switch(document_id) => engine.switch_document(document_id),
         EditorCommand::Sync(text, cursor) => {
             engine.sync(text, cursor);
@@ -746,6 +756,69 @@ async fn edit(state: State<'_, EditorState>, command: EditorCommand) -> Result<E
 #[tauri::command]
 async fn editor_snapshot(state: State<'_, EditorState>) -> Result<EditorView, String> {
     edit(state, EditorCommand::Snapshot).await
+}
+
+#[tauri::command]
+async fn editor_import(state: State<'_, EditorState>, text: String) -> Result<EditorView, String> {
+    edit(state, EditorCommand::Import(text)).await
+}
+
+fn validate_billing_url(value: &str) -> Result<tauri::Url, String> {
+    let url = tauri::Url::parse(value).map_err(|_| "Invalid billing URL")?;
+    let host = url.host_str().unwrap_or("");
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || !(host == "polar.sh" || host.ends_with(".polar.sh"))
+    {
+        return Err("Only official Polar HTTPS billing links can be opened".into());
+    }
+    Ok(url)
+}
+
+#[tauri::command]
+async fn open_billing_url(url: String) -> Result<(), String> {
+    let url = validate_billing_url(&url)?;
+    open_external_url(url)
+}
+
+fn validate_auth_url(value: &str) -> Result<tauri::Url, String> {
+    let url = tauri::Url::parse(value).map_err(|_| "Invalid sign-in URL")?;
+    let local = cfg!(debug_assertions)
+        && url.scheme() == "http"
+        && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    if (url.scheme() != "https" && !local)
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || url.path() != "/v1/auth/google/browser"
+    {
+        return Err("Invalid Termleaf sign-in link".into());
+    }
+    Ok(url)
+}
+
+#[tauri::command]
+async fn open_auth_url(url: String) -> Result<(), String> {
+    open_external_url(validate_auth_url(&url)?)
+}
+
+fn open_external_url(url: tauri::Url) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = std::process::Command::new("rundll32.exe");
+        command.arg("url.dll,FileProtocolHandler");
+        command
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut command = std::process::Command::new("xdg-open");
+    command
+        .arg(url.as_str())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1061,6 +1134,9 @@ pub fn run() {
         .manage(EditorState::new())
         .invoke_handler(tauri::generate_handler![
             editor_snapshot,
+            editor_import,
+            open_billing_url,
+            open_auth_url,
             editor_new,
             editor_switch,
             editor_sync,
@@ -1091,6 +1167,47 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../..")
             .join(path)
+    }
+
+    #[test]
+    fn browser_sign_in_links_require_the_service_auth_path() {
+        assert!(validate_auth_url(
+            "https://cloud.example.test/v1/auth/google/browser?flowId=a&state=b"
+        )
+        .is_ok());
+        for url in [
+            "file:///v1/auth/google/browser",
+            "https://cloud.example.test/other",
+            "https://user@cloud.example.test/v1/auth/google/browser",
+            "https://cloud.example.test/v1/auth/google/browser#token",
+            "http://cloud.example.test/v1/auth/google/browser",
+        ] {
+            assert!(validate_auth_url(url).is_err(), "{url}");
+        }
+    }
+
+    #[test]
+    fn cloud_import_keeps_local_drafts_and_rejects_oversized_content() {
+        let (mut engine, _directory) = test_engine("cloud-import");
+        let first = engine.active_document_id;
+        engine.sync("unsaved 한글".into(), 3);
+        let text = "cloud 日本語 👩‍💻";
+        apply_command(&mut engine, EditorCommand::Import(text.into())).unwrap();
+        assert_eq!(engine.view().text, text);
+        assert_eq!(engine.view().cursor_utf16, text.encode_utf16().count());
+        assert!(engine.view().dirty);
+        assert_eq!(engine.view().documents.len(), 2);
+        engine.switch_document(first).unwrap();
+        assert_eq!(engine.view().text, "unsaved 한글");
+        assert_eq!(engine.view().cursor_utf16, 3);
+        assert!(apply_command(
+            &mut engine,
+            EditorCommand::Import("a".repeat(2 * 1024 * 1024 + 1))
+        )
+        .is_err());
+        assert_eq!(engine.active_document_id, first);
+        assert_eq!(engine.view().documents.len(), 2);
+        assert_eq!(engine.view().text, "unsaved 한글");
     }
 
     #[test]
@@ -1388,6 +1505,21 @@ mod tests {
         assert!(engine.config.focus_mode);
         assert!(engine.config.page_width);
         assert!(engine.action("not-an-action").is_err());
+    }
+
+    #[test]
+    fn billing_links_are_restricted_to_polar_https() {
+        assert!(validate_billing_url("https://polar.sh/checkout/test").is_ok());
+        assert!(validate_billing_url("https://sandbox.polar.sh/test").is_ok());
+        for url in [
+            "http://polar.sh/test",
+            "https://polar.sh.evil.test",
+            "https://evil.test/polar.sh",
+            "file:///tmp/test",
+            "https://user@polar.sh/test",
+        ] {
+            assert!(validate_billing_url(url).is_err(), "{url}");
+        }
     }
 
     #[test]

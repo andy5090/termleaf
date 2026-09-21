@@ -1,0 +1,10 @@
+{
+  "name": "@termleaf/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./react": "./src/react.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "react": "19.2.3" },
+  "devDependencies": { "@types/react": "~19.2.2", "@types/node": "^24.0.0", "typescript": "~6.0.3" }
+}

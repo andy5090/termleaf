@@ -15,7 +15,8 @@ pixel display, one monospaced document and compact status/command rows. It uses
 the terminal's exact Galmuri glyph data (ASCII, Korean and Japanese) and four
 palettes. It remains experimental: native OS input and the existing local
 notebook storage are used; Rust live composition, typing sounds, desktop file
-access and cloud sync are not implemented on mobile. Android and iOS remain
+access are not implemented on mobile. Cloud document transfers are available as
+described in [Cloud development](cloud.md). Android and iOS remain
 in scope, along with Windows, macOS and Linux on desktop. A configured target
 is not a claim that its native runtime has been verified.
 
@@ -165,8 +166,9 @@ ignored core tests require explicit optional model-test setup; the installed
 Japanese model was exercised in the macOS native GUI.
 
 Remaining release work includes Windows/Linux native runtime checks, signed
-installers, distribution, updates, physical device/IME coverage and mobile engine integration. Cloud synchronization, encryption, accounts and billing remain separate
-work; no hosted storage service is implemented here.
+installers, distribution, updates, physical device/IME coverage and mobile engine integration. Automatic background synchronization and end-to-end encryption remain future
+work. Account, subscription and explicit cloud transfer support uses the separate
+private server described in [Cloud development](cloud.md).
 
 ### Navigation verification — 2026-09-16
 
@@ -207,3 +209,25 @@ the intended desktop/terminal interface. Verification includes:
   phone (320/390) and tablet (768) widths. This verifies layout, not native IME
   or Android Back. Android and iOS export succeeded; device runtime verification
   remains outstanding on this machine.
+
+### Cloud integration — 2026-09-22
+
+- Desktop and mobile now expose Google sign-in from Cloud, with no user-facing
+  server/password form. Provider credentials remain server-side.
+- Workspace: 30 JavaScript tests, typecheck, ESLint, desktop build and Expo
+  Android/iOS/web export passed. Desktop Rust bridge: 19 tests, rustfmt and
+  Clippy passed.
+- Shared client exercised two real local Worker sessions against D1/R2:
+  Unicode transfer, optimistic conflict, device revocation and tombstones.
+- Browser provider fixtures exercised Google waiting/cancel/automatic completion,
+  document import and conflict preservation. Mobile layouts checked at 320/390
+  pixels; desktop overlay checked against the existing Termleaf interface.
+- Actual macOS Tauri exercised the Cloud button and real local API configuration
+  error path. Native cloud import is covered by the Rust bridge test. Browser
+  bridge fixtures do not establish successful native Google login.
+- Private server: 32 tests including actual local Workers runtime, Google RSA/JWKS
+  fixtures, browser pairing/CSRF, one-time claims/cancellation, signed Polar
+  webhooks, quotas, collection and backup restoration. Build dry-run passed.
+- No hosted rollout, actual Google consent, real Polar payment or native mobile
+  device test is claimed. See [Cloud development](cloud.md) for operator setup,
+  explicit-transfer limitations and release work.

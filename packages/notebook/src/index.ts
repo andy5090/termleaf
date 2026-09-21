@@ -111,13 +111,17 @@ export class Notebook {
     this.timer = setTimeout(() => { void this.save(); }, this.autosaveDelay);
   }
 
-  createDocument = (): void => {
-    if (!this.snapshot.ready) return;
+  createDocument = (): void => { this.importDocument('', ''); };
+
+  /** Import into a new draft so cloud downloads never replace local edits. */
+  importDocument = (title: string, body: string): string | null => {
+    if (!this.snapshot.ready || typeof title !== 'string' || typeof body !== 'string') return null;
     const draft: Draft = {
       id: `${Date.now().toString(36)}-${++documentSequence}-${Math.random().toString(36).slice(2)}`,
-      title: '', body: '', updatedAt: new Date().toISOString(),
+      title, body, updatedAt: new Date().toISOString(),
     };
     this.change({ ...this.snapshot.library, activeId: draft.id, documents: [...this.snapshot.library.documents, draft] });
+    return draft.id;
   };
 
   selectDocument = (id: string): void => {

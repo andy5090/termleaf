@@ -150,3 +150,18 @@ test('runtime patches cannot change identity or persist non-string text', async 
   assert.equal(saved.documents[0].id, id);
   assert.equal(saved.documents[0].body, 'valid');
 });
+
+test('cloud import keeps unsaved local drafts and their IDs intact', async () => {
+  let saved: string | null = null;
+  const notebook = new Notebook({ read: async () => null, write: async value => { saved = value; } });
+  assert.equal(notebook.importDocument('not ready', 'ignored'), null);
+  await notebook.load();
+  notebook.createDocument();
+  const first = notebook.getSnapshot().library.activeId;
+  notebook.updateDocument({ body: 'local unsaved 🌿' });
+  const imported = notebook.importDocument('cloud.md', 'remote 日本語');
+  assert.notEqual(imported, first);
+  assert.deepEqual(notebook.getSnapshot().library.documents.map(d => d.body), ['local unsaved 🌿', 'remote 日本語']);
+  assert.equal(await notebook.save(), true);
+  assert.equal(JSON.parse(saved!).documents.length, 2);
+});

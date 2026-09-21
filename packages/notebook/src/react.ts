@@ -10,6 +10,7 @@ export function useNotebook(storage: Storage) {
     documents: snapshot.library.documents,
     activeDocument: snapshot.library.documents.find(draft => draft.id === snapshot.library.activeId) ?? null,
     createDocument: notebook.createDocument,
+    importDocument: notebook.importDocument,
     selectDocument: notebook.selectDocument,
     updateDocument: notebook.updateDocument,
     save: notebook.save,

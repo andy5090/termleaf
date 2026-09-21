@@ -10,9 +10,11 @@ import {
 import { destroyAppWindow, requestAppClose, useCloseProtection } from './closeProtection.ts';
 import { IpcQueue } from './ipcQueue.ts';
 import { native, type EditorView, type FileLocation } from './native.ts';
+import { useCloud } from '@termleaf/cloud/react';
+import { CloudPanel } from './CloudPanel.tsx';
 import { isNativeDesktop } from './storage.ts';
 
-type Panel = 'welcome' | 'help' | 'language' | 'sound' | null;
+type Panel = 'cloud' | 'welcome' | 'help' | 'language' | 'sound' | null;
 type FilePrompt = {
   kind: 'open' | 'save'; path: string; closeAfterSave: boolean;
   candidates: FileLocation['candidates']; browsing: boolean;
@@ -133,6 +135,7 @@ export function App() {
   const lastSelectedRef = useRef(0);
   const pendingKeysRef = useRef(0);
   const welcomeHandledRef = useRef(false);
+  const cloudBusyRef = useRef(false);
   const composingRef = useRef(false);
   const autosavePendingRef = useRef(false);
   const [view, setView] = useState<EditorView | null>(null);
@@ -141,6 +144,7 @@ export function App() {
   const [panel, setPanel] = useState<Panel>(null);
   const [filePrompt, setFilePrompt] = useState<FilePrompt>(null);
   const [closePrompt, setClosePrompt] = useState(false);
+  const [cloudNames, setCloudNames] = useState<Record<number, string>>({});
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -176,6 +180,15 @@ export function App() {
       return null;
     });
   }, [applyView]);
+
+  const cloud = useCloud(async file => {
+    const next = await run(() => native.importDocument(file.content ?? ''), true);
+    if (!next) throw new Error('The cloud file could not be opened. Your local documents are unchanged.');
+    setCloudNames(names => ({ ...names, [next.activeDocumentId]: file.name }));
+    return String(next.activeDocumentId);
+  });
+
+  cloudBusyRef.current = cloud.busy;
 
   useEffect(() => {
     alive.current = true;
@@ -226,7 +239,7 @@ export function App() {
   }, [browse]);
 
   const showClosePrompt = useCallback(() => {
-    if (busyRef.current) return;
+    if (busyRef.current || cloudBusyRef.current) return;
     if (hasUnsavedChanges()) {
       setPanel(null);
       setFilePrompt(null);
@@ -382,7 +395,7 @@ export function App() {
     const handleShortcut = (event: KeyboardEvent) => {
       if (busyRef.current || event.defaultPrevented || event.isComposing || event.keyCode === 229 || composingRef.current) return;
       if (modalOpenRef.current) {
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && !cloudBusyRef.current) {
           event.preventDefault(); setFilePrompt(null); setPanel(null); setClosePrompt(false);
         }
         return;
@@ -436,6 +449,7 @@ export function App() {
   const commandKey = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
 
   const shortcuts = [
+    ['', 'Cloud', () => setPanel('cloud')],
     ['F1', t.help, () => setPanel('help')],
     ['F5', t.page, () => performAction(actions.page)], ['⇧F5', t.spacing, () => performAction(actions.spacing)],
     ['F10', t.soundMenu, () => setPanel('sound')],
@@ -461,12 +475,13 @@ export function App() {
           <ul className="document-list">{view.documents.map(document => {
             const active = document.id === view.activeDocumentId;
             const dirty = document.dirty || (active && text !== view.text);
-            const label = document.label || `${t.untitled} ${document.id}`;
+            const label = cloudNames[document.id] || document.label || `${t.untitled} ${document.id}`;
             return <li key={document.id}><button type="button" aria-current={active ? 'page' : undefined} title={document.path ?? label} onClick={() => { if (!active) void navigateDocument(() => native.switchDocument(document.id)); }}>
               <span className="document-list__name">{label}</span>
               {dirty && <span className="document-list__dirty" aria-label={t.unsaved}>●</span>}
             </button></li>;
           })}</ul>
+          <button type="button" className="sidebar-open" onClick={() => setPanel('cloud')}>Cloud</button>
           <button type="button" className="sidebar-open" onClick={() => openFilePrompt('open')}>{t.fileOpen}<kbd>{commandKey}O</kbd></button>
         </div>
       </aside>}
@@ -527,6 +542,14 @@ export function App() {
 
       {closePrompt && <Overlay title={t.unsavedTitle} onClose={() => { if (!busyRef.current) setClosePrompt(false); }}>
         <div className="decision" inert={busy}><p>{t.closeQuestion}</p><div className="dialog__actions"><button type="button" onClick={() => setClosePrompt(false)}>{t.cancel}</button><button type="button" onClick={() => void destroyAppWindow().catch(reason => setError(message(reason)))}>{t.discard}</button><button className="primary" type="button" onClick={() => void saveBeforeClose()}>{t.saveAll}</button></div></div>
+      </Overlay>}
+
+      {panel === 'cloud' && <Overlay title="Termleaf Cloud" onClose={() => { if (!cloud.busy) setPanel(null); }}>
+        <CloudPanel cloud={cloud} upload={() => {
+          void run(native.snapshot).then(current => {
+            if (current) void cloud.upload(String(current.activeDocumentId), current.path ? fileName(current.path, t.untitled) : cloudNames[current.activeDocumentId] || current.documents.find(document => document.id === current.activeDocumentId)?.label || 'untitled.md', current.text);
+          });
+        }} />
       </Overlay>}
 
       {(panel === 'help' || panel === 'welcome') && <Overlay title={panel === 'welcome' ? t.welcomeTitle : t.helpTitle} onClose={() => setPanel(null)}>

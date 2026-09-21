@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useCloud } from '@termleaf/cloud/react';
+import { CloudPanel } from './src/CloudPanel';
 import { useNotebook } from '@termleaf/notebook/react';
 import type { Draft } from '@termleaf/notebook';
 import fontLicense from './src/fontLicense.json';
@@ -76,6 +78,12 @@ function WritingSurface({ draft, colors, size, spacing, big, pageWidth, keyboard
 
 export default function App() {
   const notebook = useNotebook(mobileStorage);
+  const cloud = useCloud(async file => {
+    const id = notebook.importDocument(file.name, file.content ?? '');
+    if (!id) throw new Error('Your local notebook is not ready.');
+    if (!await notebook.save()) throw new Error('The cloud copy is open locally, but saving failed. Please retry local Save before uploading.');
+    return id;
+  });
   const { width } = useWindowDimensions();
   const [theme, setTheme] = useState<ThemeName>('night');
   const [focus, setFocus] = useState(false);
@@ -84,7 +92,7 @@ export default function App() {
   const [spacing, setSpacing] = useState(2);
   const [pageWidth, setPageWidth] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [panel, setPanel] = useState<'documents' | 'help' | 'rename' | 'license' | null>(null);
+  const [panel, setPanel] = useState<'cloud' | 'documents' | 'help' | 'rename' | 'license' | null>(null);
   const [name, setName] = useState('');
   const cursors = useRef(new Map<string, number>());
   const initialized = useRef(false);
@@ -116,7 +124,7 @@ export default function App() {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  const openPanel = (next: 'documents' | 'help' | 'rename') => {
+  const openPanel = (next: 'cloud' | 'documents' | 'help' | 'rename') => {
     Keyboard.dismiss();
     if (next === 'rename') setName(draft?.title ?? '');
     setPanel(next);
@@ -167,13 +175,13 @@ export default function App() {
         </View>}
       </KeyboardAvoidingView>
     </SafeAreaView>
-    <Modal visible={panel !== null} transparent animationType="fade" onRequestClose={() => setPanel(null)}>
+    <Modal visible={panel !== null} transparent animationType="fade" onRequestClose={() => { if (!cloud.busy) setPanel(null); }}>
       <View style={styles.overlay}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => setPanel(null)} style={StyleSheet.absoluteFill} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Close menu" onPress={() => { if (!cloud.busy) setPanel(null); }} style={StyleSheet.absoluteFill} />
         <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { width: Math.min(360, width * 0.86), backgroundColor: colors.bg, borderRightColor: colors.dim }]} edges={['top', 'bottom', 'left']}>
           <View style={styles.drawerHeader}>
             <Text accessibilityRole="header" style={[styles.brand, { color: colors.fg }]}>TERMLEAF</Text>
-            {command('Close', () => setPanel(null))}
+            {command('Close', () => setPanel(null), cloud.busy)}
           </View>
           {panel === 'documents' && <>
             <Pressable accessibilityRole="button" accessibilityLabel="New writing" disabled={!notebook.ready} onPress={newWriting}
@@ -192,10 +200,14 @@ export default function App() {
               })}
             </ScrollView>
             <View style={[styles.drawerFooter, { borderColor: colors.dim }]}>
+              {command('Cloud', () => setPanel('cloud'))}
               {command('Help', () => setPanel('help'))}
               <Text accessibilityLiveRegion="polite" style={[styles.status, { color: colors.fg }]}>{status}</Text>
             </View>
           </>}
+          {panel === 'cloud' && <CloudPanel cloud={cloud} colors={colors} upload={() => {
+            if (draft) void cloud.upload(draft.id, documentLabel(draft, 'untitled.md'), draft.body);
+          }} />}
           {panel === 'rename' && <View style={styles.panelBody}>
             <Text accessibilityRole="header" style={[styles.message, { color: colors.fg }]}>Document name</Text>
             <TextInput accessibilityLabel="Document name" autoFocus value={name} onChangeText={setName} autoCorrect={false}

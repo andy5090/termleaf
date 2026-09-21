@@ -30,6 +30,9 @@ export interface FileLocation {
 }
 
 export const native = {
+  importDocument: (text: string) => invoke<EditorView>('editor_import', { text }),
+  openBilling: (url: string) => invoke<void>('open_billing_url', { url }),
+  openAuthentication: (url: string) => invoke<void>('open_auth_url', { url }),
   newDocument: () => invoke<EditorView>('editor_new'),
   switchDocument: (documentId: number) => invoke<EditorView>('editor_switch', { documentId }),
   snapshot: () => invoke<EditorView>('editor_snapshot'),

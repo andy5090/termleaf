@@ -264,3 +264,16 @@ kbd { font: inherit; font-weight: 800; }
 .desktop-shell--collapsed .document-sidebar { padding-inline: 7px; }
 .desktop-shell--collapsed .new-writing { width: 32px; border: 0; }
 @media (max-width: 800px) { .desktop-shell:not(.desktop-shell--collapsed):not(.desktop-shell--focus) { grid-template-columns: 190px minmax(0, 1fr); } }
+
+.cloud-panel { padding: 20px; font-size: 12px; line-height: 1.7; }
+.cloud-panel p { overflow-wrap: anywhere; }
+.cloud-panel button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--termleaf-dim); background: transparent; }
+.cloud-panel small { color: var(--termleaf-fg); opacity: .75; }
+.cloud-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cloud-files { padding: 0; list-style: none; }
+.cloud-files li { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.cloud-files li span { min-width: 0; overflow-wrap: anywhere; }
+.cloud-files button { flex: none; }
+.cloud-panel [role="alert"] { border-left: 2px solid var(--termleaf-accent); padding-left: 10px; }
+
+.cloud-pairing { font-size: 30px; letter-spacing: 6px; text-align: center; }
