@@ -19,7 +19,8 @@ Desktop builds use `VITE_TERMLEAF_CLOUD_URL`; Expo builds use
 `EXPO_PUBLIC_TERMLEAF_CLOUD_URL`. These contain only the public service origin,
 not secrets. Set the origin at build time. Release builds without one show that
 Cloud is not available yet; they do not ask the user for a server. Desktop dev
-uses `http://127.0.0.1:8787` when no override is set. HTTP is allowed only on
+uses `http://localhost:8787` when no override is set. Always use `localhost`
+for local app/service URLs and OAuth callbacks. HTTP is allowed only on
 loopback; physical-device development needs an HTTPS service.
 
 The private server README covers Google Web application OAuth credentials,

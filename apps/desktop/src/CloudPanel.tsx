@@ -3,7 +3,7 @@ import type { CloudState } from '@termleaf/cloud/react';
 import { native } from './native.ts';
 
 export function CloudPanel({ cloud, upload }: { cloud: CloudState; upload: () => void }) {
-  const url = import.meta.env.VITE_TERMLEAF_CLOUD_URL ?? (import.meta.env.DEV ? 'http://127.0.0.1:8787' : undefined);
+  const url = import.meta.env.VITE_TERMLEAF_CLOUD_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : undefined);
   const [linkError, setLinkError] = useState<string | null>(null);
   const billing = async (kind: 'checkout' | 'portal') => {
     setLinkError(null);

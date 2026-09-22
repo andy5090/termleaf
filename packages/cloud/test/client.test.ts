@@ -64,7 +64,7 @@ test('cancel racing a successful Google handoff revokes the new session', async 
 
 test('credentials go only to a validated HTTPS or loopback server, redirects fail closed', async () => {
   for (const value of ['http://example.com', 'file:///tmp/x', 'https://user:password@example.com', 'https://host.test?q=token', 'https://host.test#token']) assert.throws(() => serverUrl(value));
-  assert.equal(serverUrl('http://127.0.0.1:8787/'), 'http://127.0.0.1:8787');
+  assert.equal(serverUrl('http://localhost:8787/'), 'http://localhost:8787');
   const requests: RequestInit[] = [];
   const client = new CloudClient('https://sync.example.test', async (_url, init) => {
     requests.push(init!);
