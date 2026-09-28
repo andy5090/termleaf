@@ -42,7 +42,7 @@ test("server-renders English as the default locale", async () => {
   assert.match(html, /<title>Termleaf — Write\. Nothing else\.<\/title>/i);
   assert.match(html, /Write\./);
   assert.match(html, /Nothing else\./);
-  assert.match(html, /v0\.5\.1/);
+  assert.match(html, /v0\.6\.0/);
   assert.match(html, /https:\/\/termleaf\.com\/install/);
   assert.match(html, /Real-recorded typewriter sound/);
   assert.match(html, /One command gets you set up/);
@@ -142,4 +142,39 @@ test("removes the disposable starter surface", async () => {
     access(new URL("public/termleaf-terminal.png", templateRoot)),
   ]);
   await assert.rejects(access(new URL("../app/_sites-preview", templateRoot)));
+});
+
+
+test("desktop preview downloads are visible in every locale and remain separate from the terminal installer", async () => {
+  const prefix = "https://github.com/andy5090/termleaf/releases/download/desktop-preview-20260928/";
+  const files = [
+    "Termleaf-0.1.0-preview.1-macos-universal.dmg",
+    "Termleaf-0.1.0-preview.1-windows-x64-setup.exe",
+    "Termleaf-0.1.0-preview.1-linux-x64.AppImage",
+    "Termleaf-0.1.0-preview.1-linux-x64.deb",
+    "SHA256SUMS.txt",
+  ];
+  for (const [locale, title, nav, terminal, warning] of [
+    ["en", "Open the app. Find your words.", "Download", "Latest terminal release", "Windows is unsigned"],
+    ["ko", "앱을 열고, 문장을 시작하세요.", "다운로드", "최신 터미널 버전", "Windows는 서명되지 않았으며"],
+    ["ja", "アプリを開いて、言葉をつづる。", "ダウンロード", "最新のターミナル版", "Windows版は未署名"],
+  ]) {
+    const html = (await (await render({ acceptLanguage: locale })).text()).replace(/<!--.*?-->/g, "");
+    const section = html.match(/<section class="download-section"[^>]*>([\s\S]*?)<\/section>/)?.[1];
+    assert.ok(section, `${locale}: rendered desktop download section`);
+    assert.ok(section.includes(title));
+    assert.ok(section.includes(warning));
+    assert.match(section, /v0\.1\.0-preview\.1/);
+    for (const platform of ["macOS", "Windows", "Linux", "Apple Silicon + Intel", "x64"]) assert.ok(section.includes(platform));
+    for (const file of files) assert.equal(section.split(`href="${prefix}${file}"`).length - 1, 1, `${locale}: ${file} has one direct download`);
+    assert.ok(section.includes('href="https://github.com/andy5090/termleaf/releases/tag/desktop-preview-20260928"'));
+    assert.ok(html.includes(`class="nav-download" href="#download">${nav}`));
+    assert.match(html, /class="button button-primary" href="#download"/);
+    assert.match(html, /id="install" aria-labelledby="install-title"/);
+    const installPath = locale === "en" ? "install" : `install/${locale}`;
+    assert.ok(html.includes(`curl -fsSL https://termleaf.com/${installPath} | sh`));
+    assert.ok(html.includes(`href="https://github.com/andy5090/termleaf/releases/latest">${terminal}`));
+    assert.ok(!section.includes("releases/latest"));
+    assert.doesNotMatch(section, /notarized|Microsoft verified/i);
+  }
 });

@@ -428,6 +428,7 @@ h1 em {
 .manifesto,
 .features-section,
 .themes-section,
+.download-section,
 .install-section,
 footer {
   width: min(1180px, calc(100% - 48px));
@@ -562,6 +563,134 @@ footer {
 .theme-xt { background: #071108; color: #7fff62; }
 .theme-amber { background: #130d05; color: #ffae42; }
 
+.download-section {
+  padding: 110px 0;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 28px;
+}
+
+.download-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.download-heading .section-heading {
+  margin-bottom: 42px;
+}
+
+.download-description {
+  max-width: 630px;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.85;
+  word-break: keep-all;
+}
+
+.preview-label {
+  padding: 12px 16px;
+  flex: 0 0 auto;
+  border: 1px solid var(--ink);
+  background: var(--amber);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.preview-label span {
+  display: block;
+  font-weight: 700;
+}
+
+.download-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
+}
+
+.download-card {
+  min-width: 0;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.download-platform {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.download-platform h3 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+
+.download-platform > span {
+  color: var(--muted);
+  font-size: 24px;
+}
+
+.download-architecture {
+  margin: 10px 0 38px;
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+}
+
+.download-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.download-links .button {
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.download-links .button:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.download-details {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.download-details p {
+  max-width: 640px;
+  margin: 0;
+}
+
+.download-details > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.download-details a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 .install-section {
   padding: 120px 0;
   display: grid;
@@ -682,6 +811,12 @@ footer {
 }
 
 @media (max-width: 960px) {
+  .download-card { padding: 22px; }
+  .download-heading { flex-direction: column; gap: 0; }
+  .download-heading .section-heading { margin-bottom: 24px; }
+  .preview-label { margin-bottom: 32px; }
+  .download-details { flex-direction: column; gap: 16px; }
+
   .hero {
     grid-template-columns: 1fr;
     padding-top: 72px;
@@ -718,6 +853,7 @@ footer {
   .manifesto,
   .features-section,
   .themes-section,
+  .download-section,
   .install-section,
   footer {
     width: min(100% - 30px, 1180px);
@@ -732,7 +868,7 @@ footer {
     font-size: 11px;
   }
 
-  nav a:not(:last-child) {
+  nav a:not(.nav-download) {
     display: none;
   }
 
@@ -779,10 +915,12 @@ footer {
   .manifesto,
   .features-section,
   .themes-section,
+  .download-section,
   .install-section {
     padding: 82px 0;
   }
 
+  .download-grid,
   .feature-grid,
   .theme-swatches {
     grid-template-columns: minmax(0, 1fr);
@@ -794,7 +932,8 @@ footer {
   :lang(ja) .feature-card p,
   :lang(ja) .themes-copy h2,
   :lang(ja) .install-copy h2,
-  :lang(ja) .install-copy p {
+  :lang(ja) .install-copy p,
+  :lang(ja) .download-description {
     overflow-wrap: anywhere;
     word-break: normal;
   }

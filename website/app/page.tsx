@@ -3,6 +3,18 @@ import { CopyCommand } from "./CopyCommand";
 import { LanguageSelector } from "./LanguageSelector";
 import { detectLocale, type Locale } from "./locale";
 
+const desktopVersion = "0.1.0-preview.1";
+const desktopRelease = "https://github.com/andy5090/termleaf/releases/tag/desktop-preview-20260928";
+const desktopAssets = "https://github.com/andy5090/termleaf/releases/download/desktop-preview-20260928/";
+const desktopDownloads = [
+  { name: "macOS", architecture: "Apple Silicon + Intel", files: [{ label: "DMG", name: `Termleaf-${desktopVersion}-macos-universal.dmg` }] },
+  { name: "Windows", architecture: "x64", files: [{ label: "EXE", name: `Termleaf-${desktopVersion}-windows-x64-setup.exe` }] },
+  { name: "Linux", architecture: "x64", files: [
+    { label: "AppImage", name: `Termleaf-${desktopVersion}-linux-x64.AppImage` },
+    { label: "DEB", name: `Termleaf-${desktopVersion}-linux-x64.deb` },
+  ] },
+];
+
 const installCommands: Record<Locale, string> = {
   en: "curl -fsSL https://termleaf.com/install | sh",
   ko: "curl -fsSL https://termleaf.com/install/ko | sh",
@@ -13,16 +25,17 @@ const content = {
   en: {
     brandHome: "Termleaf home",
     navLabel: "Primary navigation",
-    nav: { features: "Features", install: "Install" },
+    nav: { features: "Features", install: "Terminal", download: "Download" },
     hero: {
       headline: "Write.",
       emphasis: "Nothing else.",
       description:
         "Termleaf is a distraction-free terminal text editor built for focused writing. Plain-text files, a quiet screen, and the tactile rhythm of real typewriter sound.",
-      install: "Install now",
+      install: "Install terminal",
+      download: "Download desktop",
       source: "View source",
       factsLabel: "Product highlights",
-      facts: ["Open source", "Language packs"],
+      facts: ["Open-source terminal", "Language packs"],
     },
     terminal: {
       label: "Example of the Termleaf writing screen",
@@ -77,8 +90,19 @@ const content = {
         { name: "amber", label: "Amber", className: "theme-amber" },
       ],
     },
+    download: {
+      kicker: "A PLACE ON YOUR DESKTOP",
+      title: "Open the app. Find your words.",
+      description: "The familiar Termleaf writing space, in a desktop app. Choose your system and start a draft.",
+      preview: "Desktop preview",
+      action: "Download",
+      notes: "Release notes & installation help",
+      checksums: "Verify downloads · SHA256",
+      caveat: "An early preview. Windows is unsigned; macOS may show a security prompt. Check the installation notes before opening.",
+      terminalRelease: "Latest terminal release",
+    },
     install: {
-      kicker: "ONE COMMAND AWAY",
+      kicker: "TERMINAL · ONE COMMAND AWAY",
       title: ["Open your terminal.", "Start writing."],
       description:
         "One command gets you set up. Open your terminal and start your first draft.",
@@ -96,16 +120,17 @@ const content = {
   ko: {
     brandHome: "Termleaf 처음으로",
     navLabel: "주요 메뉴",
-    nav: { features: "기능", install: "설치" },
+    nav: { features: "기능", install: "터미널", download: "다운로드" },
     hero: {
       headline: "터미널에,",
       emphasis: "글만 남기다.",
       description:
         "Termleaf는 쓰는 일에만 집중하도록 만든 터미널 텍스트 에디터입니다. 파일은 평범한 텍스트로, 화면은 조용하게, 타건의 리듬은 그대로.",
-      install: "지금 설치하기",
+      install: "터미널 버전 설치",
+      download: "데스크톱 앱 다운로드",
       source: "소스 보기",
       factsLabel: "제품 특징 요약",
-      facts: ["오픈 소스", "한글 UI"],
+      facts: ["오픈 소스 터미널", "한글 UI"],
     },
     terminal: {
       label: "Termleaf 편집 화면 예시",
@@ -160,8 +185,19 @@ const content = {
         { name: "amber", label: "호박", className: "theme-amber" },
       ],
     },
+    download: {
+      kicker: "A PLACE ON YOUR DESKTOP",
+      title: "앱을 열고, 문장을 시작하세요.",
+      description: "익숙한 Termleaf의 글쓰기 화면을 데스크톱 앱으로 만나세요. 사용하는 운영체제에 맞게 내려받으면 됩니다.",
+      preview: "데스크톱 미리보기",
+      action: "다운로드",
+      notes: "출시 안내 · 설치 도움말",
+      checksums: "다운로드 검증 · SHA256",
+      caveat: "초기 미리보기 버전입니다. Windows는 서명되지 않았으며 macOS에서도 보안 안내가 나타날 수 있습니다. 실행 전 설치 안내를 확인하세요.",
+      terminalRelease: "최신 터미널 버전",
+    },
     install: {
-      kicker: "ONE COMMAND AWAY",
+      kicker: "TERMINAL · ONE COMMAND AWAY",
       title: ["터미널을 열고,", "바로 시작하세요."],
       description:
         "한 줄이면 Termleaf와 한국어팩 설치가 끝납니다. 바로 한국어 화면에서 첫 문장을 시작하세요.",
@@ -179,16 +215,17 @@ const content = {
   ja: {
     brandHome: "Termleaf ホーム",
     navLabel: "メインナビゲーション",
-    nav: { features: "機能", install: "インストール" },
+    nav: { features: "機能", install: "ターミナル", download: "ダウンロード" },
     hero: {
       headline: "書く。",
       emphasis: "それだけ。",
       description:
         "Termleafは、書くことだけに集中するためのターミナルテキストエディターです。プレーンテキスト、静かな画面、実録したタイプライター音の心地よいリズム。",
-      install: "今すぐインストール",
+      install: "ターミナル版を入れる",
+      download: "デスクトップ版を入れる",
       source: "ソースを見る",
       factsLabel: "製品の特徴",
-      facts: ["オープンソース", "日本語パック"],
+      facts: ["オープンソースのターミナル版", "日本語パック"],
     },
     terminal: {
       label: "Termleafの編集画面例",
@@ -243,8 +280,19 @@ const content = {
         { name: "amber", label: "アンバー", className: "theme-amber" },
       ],
     },
+    download: {
+      kicker: "A PLACE ON YOUR DESKTOP",
+      title: "アプリを開いて、言葉をつづる。",
+      description: "いつものTermleafの執筆画面を、デスクトップアプリで。お使いのOSに合わせてダウンロードできます。",
+      preview: "デスクトップ・プレビュー",
+      action: "ダウンロード",
+      notes: "リリース情報・インストール方法",
+      checksums: "ダウンロードの検証 · SHA256",
+      caveat: "初期プレビュー版です。Windows版は未署名です。macOSでもセキュリティの案内が表示される場合があります。起動前にインストール方法をご確認ください。",
+      terminalRelease: "最新のターミナル版",
+    },
     install: {
-      kicker: "ONE COMMAND AWAY",
+      kicker: "TERMINAL · ONE COMMAND AWAY",
       title: ["ターミナルを開いて、", "すぐに書き始める。"],
       description:
         "一行でTermleafと日本語パックをまとめてインストール。最初から日本語画面で書き始められます。",
@@ -299,6 +347,7 @@ export default async function Home() {
           <nav aria-label={copy.navLabel}>
             <a href="#features">{copy.nav.features}</a>
             <a href="#install">{copy.nav.install}</a>
+            <a className="nav-download" href="#download">{copy.nav.download} ↓</a>
             <a
               href="https://github.com/andy5090/termleaf"
               target="_blank"
@@ -315,7 +364,7 @@ export default async function Home() {
         <div className="hero-copy">
           <p className="eyebrow">
             <span className="status-dot" aria-hidden="true" />
-            v0.5.1 · macOS, Linux &amp; Termux
+            TERMINAL v0.6.0 · macOS, Linux &amp; Termux
           </p>
           <h1>
             {copy.hero.headline}
@@ -324,16 +373,11 @@ export default async function Home() {
           </h1>
           <p className="hero-description">{copy.hero.description}</p>
           <div className="hero-actions">
-            <a className="button button-primary" href="#install">
-              {copy.hero.install} <span aria-hidden="true">↓</span>
+            <a className="button button-primary" href="#download">
+              {copy.hero.download} <span aria-hidden="true">↓</span>
             </a>
-            <a
-              className="button button-secondary"
-              href="https://github.com/andy5090/termleaf"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {copy.hero.source}
+            <a className="button button-secondary" href="#install">
+              {copy.hero.install}
             </a>
           </div>
           <ul className="hero-facts" aria-label={copy.hero.factsLabel}>
@@ -411,6 +455,36 @@ export default async function Home() {
         </div>
       </section>
 
+      <section className="download-section" id="download" aria-labelledby="download-title">
+        <div className="download-heading">
+          <div className="section-heading">
+            <p className="section-kicker">{copy.download.kicker}</p>
+            <h2 id="download-title">{copy.download.title}</h2>
+            <p className="download-description">{copy.download.description}</p>
+          </div>
+          <p className="preview-label">{copy.download.preview}<span>v{desktopVersion}</span></p>
+        </div>
+        <div className="download-grid">
+          {desktopDownloads.map((platform) => (
+            <article className="download-card" key={platform.name}>
+              <div className="download-platform"><h3>{platform.name}</h3><span aria-hidden="true">↓</span></div>
+              <p className="download-architecture">{platform.architecture}</p>
+              <div className="download-links">
+                {platform.files.map((file) => (
+                  <a className="button button-secondary" href={`${desktopAssets}${file.name}`} key={file.name} aria-label={`${platform.name} ${file.label} ${copy.download.action}`}>
+                    {copy.download.action}<span>{file.label} ↓</span>
+                  </a>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="download-details">
+          <p>{copy.download.caveat}</p>
+          <div><a href={desktopRelease}>{copy.download.notes} ↗</a><a href={`${desktopAssets}SHA256SUMS.txt`}>{copy.download.checksums} ↗</a></div>
+        </div>
+      </section>
+
       <section className="install-section" id="install" aria-labelledby="install-title">
         <div className="install-copy">
           <p className="section-kicker">{copy.install.kicker}</p>
@@ -441,7 +515,7 @@ export default async function Home() {
           </div>
         </div>
         <div className="footer-links">
-          <a href="https://github.com/andy5090/termleaf/releases/latest">Latest release ↗</a>
+          <a href="https://github.com/andy5090/termleaf/releases/latest">{copy.download.terminalRelease} ↗</a>
           <a href="https://github.com/andy5090/termleaf">GitHub ↗</a>
           <span>MIT OR Apache-2.0</span>
         </div>
