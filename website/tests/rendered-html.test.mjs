@@ -154,16 +154,17 @@ test("desktop preview downloads are visible in every locale and remain separate 
     "Termleaf-0.1.0-preview.1-linux-x64.deb",
     "SHA256SUMS.txt",
   ];
-  for (const [locale, title, nav, terminal, warning] of [
-    ["en", "Open the app. Find your words.", "Download", "Latest terminal release", "Windows is unsigned"],
-    ["ko", "앱을 열고, 문장을 시작하세요.", "다운로드", "최신 터미널 버전", "Windows는 서명되지 않았으며"],
-    ["ja", "アプリを開いて、言葉をつづる。", "ダウンロード", "最新のターミナル版", "Windows版は未署名"],
+  for (const [locale, title, nav, terminal, warning, notarization] of [
+    ["en", "Open the app. Find your words.", "Download", "Latest terminal release", "Windows is unsigned", "macOS is signed with Developer ID and notarized by Apple"],
+    ["ko", "앱을 열고, 문장을 시작하세요.", "다운로드", "최신 터미널 버전", "Windows는 서명되지 않았습니다", "macOS는 서명 및 Apple 공증이 완료되었습니다"],
+    ["ja", "アプリを開いて、言葉をつづる。", "ダウンロード", "最新のターミナル版", "Windows版は未署名", "macOS版は署名済みで、Appleの公証を受けています"],
   ]) {
     const html = (await (await render({ acceptLanguage: locale })).text()).replace(/<!--.*?-->/g, "");
     const section = html.match(/<section class="download-section"[^>]*>([\s\S]*?)<\/section>/)?.[1];
     assert.ok(section, `${locale}: rendered desktop download section`);
     assert.ok(section.includes(title));
     assert.ok(section.includes(warning));
+    assert.ok(section.includes(notarization));
     assert.match(section, /v0\.1\.0-preview\.1/);
     for (const platform of ["macOS", "Windows", "Linux", "Apple Silicon + Intel", "x64"]) assert.ok(section.includes(platform));
     for (const file of files) assert.equal(section.split(`href="${prefix}${file}"`).length - 1, 1, `${locale}: ${file} has one direct download`);
@@ -175,6 +176,6 @@ test("desktop preview downloads are visible in every locale and remain separate 
     assert.ok(html.includes(`curl -fsSL https://termleaf.com/${installPath} | sh`));
     assert.ok(html.includes(`href="https://github.com/andy5090/termleaf/releases/latest">${terminal}`));
     assert.ok(!section.includes("releases/latest"));
-    assert.doesNotMatch(section, /notarized|Microsoft verified/i);
+    assert.doesNotMatch(section, /Microsoft verified/i);
   }
 });

@@ -98,7 +98,7 @@ const content = {
       action: "Download",
       notes: "Release notes & installation help",
       checksums: "Verify downloads · SHA256",
-      caveat: "An early preview. Windows is unsigned; macOS may show a security prompt. Check the installation notes before opening.",
+      caveat: "An early preview. macOS is signed with Developer ID and notarized by Apple. Windows is unsigned. Check the installation notes before opening.",
       terminalRelease: "Latest terminal release",
     },
     install: {
@@ -193,7 +193,7 @@ const content = {
       action: "다운로드",
       notes: "출시 안내 · 설치 도움말",
       checksums: "다운로드 검증 · SHA256",
-      caveat: "초기 미리보기 버전입니다. Windows는 서명되지 않았으며 macOS에서도 보안 안내가 나타날 수 있습니다. 실행 전 설치 안내를 확인하세요.",
+      caveat: "초기 미리보기 버전입니다. macOS는 서명 및 Apple 공증이 완료되었습니다. Windows는 서명되지 않았습니다. 실행 전 설치 안내를 확인하세요.",
       terminalRelease: "최신 터미널 버전",
     },
     install: {
@@ -288,7 +288,7 @@ const content = {
       action: "ダウンロード",
       notes: "リリース情報・インストール方法",
       checksums: "ダウンロードの検証 · SHA256",
-      caveat: "初期プレビュー版です。Windows版は未署名です。macOSでもセキュリティの案内が表示される場合があります。起動前にインストール方法をご確認ください。",
+      caveat: "初期プレビュー版です。macOS版は署名済みで、Appleの公証を受けています。Windows版は未署名です。起動前にインストール方法をご確認ください。",
       terminalRelease: "最新のターミナル版",
     },
     install: {
