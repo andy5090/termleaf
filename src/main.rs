@@ -4,6 +4,7 @@
 //! jamo-by-jamo composition. Rendering is ANSI-only (via crossterm) for broad
 //! terminal compatibility.
 
+mod auth;
 mod update;
 
 use termleaf::{audio, config, editor, input, language, renderer, ui};
@@ -32,6 +33,34 @@ use ui::{
 fn main() -> io::Result<()> {
     let path = match parse_startup_args(std::env::args_os().skip(1).collect()) {
         Ok(StartupRequest::Edit(path)) => path,
+        Ok(StartupRequest::Login {
+            open_browser,
+            device_name,
+        }) => {
+            if let Err(error) = auth::login(open_browser, device_name.as_deref()) {
+                eprintln!("termleaf login: {error}");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+        Ok(StartupRequest::Logout { local_only }) => {
+            if let Err(error) = auth::logout(local_only) {
+                eprintln!("termleaf logout: {error}");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+        Ok(StartupRequest::WhoAmI) => {
+            if let Err(error) = auth::whoami() {
+                eprintln!("termleaf whoami: {error}");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+        Ok(StartupRequest::AuthHelp) => {
+            print_auth_help();
+            return Ok(());
+        }
         Ok(StartupRequest::Help) => {
             print_help();
             return Ok(());
@@ -273,8 +302,19 @@ fn main() -> io::Result<()> {
 #[derive(Debug, PartialEq, Eq)]
 enum StartupRequest {
     Edit(Option<PathBuf>),
+    Login {
+        open_browser: bool,
+        device_name: Option<String>,
+    },
+    Logout {
+        local_only: bool,
+    },
+    WhoAmI,
+    AuthHelp,
     Help,
-    Update { force: bool },
+    Update {
+        force: bool,
+    },
     UpdateHelp,
     Language(LanguageCommand),
     BuildJapaneseCache(PathBuf),
@@ -295,6 +335,21 @@ fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
         [] => Ok(StartupRequest::Edit(None)),
         [flag] if flag == "-h" || flag == "--help" => Ok(StartupRequest::Help),
         [flag] if flag == "-V" || flag == "--version" => Ok(StartupRequest::Version),
+        [command, flag]
+            if matches!(command.to_str(), Some("login" | "logout" | "whoami"))
+                && (flag == "-h" || flag == "--help") =>
+        {
+            Ok(StartupRequest::AuthHelp)
+        }
+        [command, rest @ ..] if command == "login" => parse_login_args(rest),
+        [command] if command == "logout" => Ok(StartupRequest::Logout { local_only: false }),
+        [command, flag] if command == "logout" && flag == "--local" => {
+            Ok(StartupRequest::Logout { local_only: true })
+        }
+        [command] if command == "whoami" => Ok(StartupRequest::WhoAmI),
+        [command, ..] if command == "logout" || command == "whoami" => {
+            Err("invalid authentication options; try 'termleaf login --help'".into())
+        }
         [command] if command == "update" => Ok(StartupRequest::Update { force: false }),
         [command, flag] if command == "update" && flag == "--force" => {
             Ok(StartupRequest::Update { force: true })
@@ -346,6 +401,44 @@ fn parse_startup_args(args: Vec<OsString>) -> Result<StartupRequest, String> {
     }
 }
 
+fn parse_login_args(args: &[OsString]) -> Result<StartupRequest, String> {
+    let mut open_browser = true;
+    let mut device_name = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].to_str() {
+            Some("--no-browser") if open_browser => open_browser = false,
+            Some("--device-name") if device_name.is_none() => {
+                index += 1;
+                let name = args
+                    .get(index)
+                    .and_then(|name| name.to_str())
+                    .ok_or("--device-name requires a name")?;
+                if name.trim().is_empty()
+                    || name.encode_utf16().count() > 100
+                    || name.chars().any(char::is_control)
+                {
+                    return Err(
+                        "device name must contain 1–100 characters without control characters"
+                            .into(),
+                    );
+                }
+                device_name = Some(name.trim().to_owned());
+            }
+            _ => return Err("invalid login options; try 'termleaf login --help'".into()),
+        }
+        index += 1;
+    }
+    Ok(StartupRequest::Login {
+        open_browser,
+        device_name,
+    })
+}
+
+fn print_auth_help() {
+    println!("Sign in to Termleaf Cloud with Google.\n\nUsage:\n  termleaf login [--no-browser] [--device-name NAME]\n  termleaf whoami\n  termleaf logout [--local]\n\nLogin opens your browser and shows a six-digit device confirmation code.\nUse --no-browser to open the printed URL on another device.\nLogout revokes your session; --local only removes it from this computer.\nTERMLEAF_CLOUD_URL selects an HTTPS service origin (or http://localhost:PORT for development).\nTo edit a file named login, logout, or whoami, use 'termleaf -- FILE'.");
+}
+
 fn parse_language_command(
     subcommand: &OsString,
     code: &OsString,
@@ -374,10 +467,16 @@ Usage:
   termleaf [FILE]
   termleaf update [--force]
   termleaf language <COMMAND>
+  termleaf login [--no-browser] [--device-name NAME]
+  termleaf whoami
+  termleaf logout [--local]
 
 Commands:
   update           Update to the latest GitHub release
   language         List, install, select, or remove language packs
+  login            Sign in to Termleaf Cloud with Google
+  whoami           Show your cloud account and subscription
+  logout           Revoke and remove the saved cloud session
 
 Arguments:
   [FILE]           Open a document, or create it when first saved
@@ -1186,6 +1285,67 @@ mod tests {
             parse_startup_args(args(&["update", "--help"])),
             Ok(StartupRequest::UpdateHelp)
         );
+    }
+
+    #[test]
+    fn startup_arguments_support_cloud_authentication_and_literal_filenames() {
+        assert_eq!(
+            parse_startup_args(args(&["login"])),
+            Ok(StartupRequest::Login {
+                open_browser: true,
+                device_name: None,
+            })
+        );
+        assert_eq!(
+            parse_startup_args(args(&[
+                "login",
+                "--no-browser",
+                "--device-name",
+                "My terminal"
+            ])),
+            Ok(StartupRequest::Login {
+                open_browser: false,
+                device_name: Some("My terminal".into()),
+            })
+        );
+        assert_eq!(
+            parse_startup_args(args(&["logout"])),
+            Ok(StartupRequest::Logout { local_only: false })
+        );
+        assert_eq!(
+            parse_startup_args(args(&["logout", "--local"])),
+            Ok(StartupRequest::Logout { local_only: true })
+        );
+        assert_eq!(
+            parse_startup_args(args(&["whoami"])),
+            Ok(StartupRequest::WhoAmI)
+        );
+        for name in ["login", "logout", "whoami"] {
+            assert_eq!(
+                parse_startup_args(args(&[name, "--help"])),
+                Ok(StartupRequest::AuthHelp)
+            );
+            assert_eq!(
+                parse_startup_args(args(&["--", name])),
+                Ok(StartupRequest::Edit(Some(PathBuf::from(name))))
+            );
+        }
+    }
+
+    #[test]
+    fn startup_arguments_reject_invalid_auth_options() {
+        for values in [
+            vec!["login", "--unknown"],
+            vec!["login", "--device-name"],
+            vec!["login", "--device-name", ""],
+            vec!["login", "--device-name", "bad\nname"],
+            vec!["login", "--no-browser", "--no-browser"],
+            vec!["login", "--device-name", "one", "--device-name", "two"],
+            vec!["logout", "--unknown"],
+            vec!["whoami", "extra"],
+        ] {
+            assert!(parse_startup_args(args(&values)).is_err(), "{values:?}");
+        }
     }
 
     #[test]

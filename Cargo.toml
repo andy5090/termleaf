@@ -2,6 +2,7 @@
 name = "termleaf"
 version = "0.6.0"
 edition = "2021"
+rust-version = "1.89"
 description = "A distraction-free terminal editor for prose, with cursor-side big type and optional typewriter sound."
 repository = "https://github.com/andy5090/termleaf"
 homepage = "https://termleaf.com"
@@ -17,6 +18,8 @@ path = "src/main.rs"
 [dependencies]
 crossterm = "0.28"
 libakaza = { git = "https://github.com/akaza-im/akaza.git", rev = "33e5e422810377190f55551acf2510d8954c29d5" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 rodio = { version = "0.22.2", default-features = false, features = ["playback"] }
