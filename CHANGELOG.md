@@ -7,6 +7,28 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-11
+
+### Added
+
+- Added `termleaf login` for Google sign-in through the browser with a
+  six-digit pairing code, automatic browser opening, and a `--no-browser`
+  option for remote terminals.
+- Added `termleaf whoami`, server-side session revocation with
+  `termleaf logout`, and offline session removal with `termleaf logout --local`.
+- Stored cloud sessions with owner-only permissions and bound them to the
+  selected API origin. Cloud file transfer and synchronization are not included.
+
+### Changed
+
+- Required Rust 1.89 or later for source builds to serialize authentication
+  commands with operating-system file locks.
+
+### Removed
+
+- Removed the website's unused ChatGPT authentication starter and its
+  documentation.
+
 ## [0.6.0] - 2026-09-02
 
 ### Added
@@ -227,7 +249,9 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/andy5090/termleaf/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/andy5090/termleaf/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/andy5090/termleaf/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/andy5090/termleaf/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/andy5090/termleaf/compare/v0.3.7...v0.4.0
