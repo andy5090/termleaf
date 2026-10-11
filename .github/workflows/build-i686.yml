@@ -1,6 +1,7 @@
 name: Build Linux i686
 
 on:
+  workflow_dispatch:
   workflow_call:
     inputs:
       plan:
@@ -19,6 +20,13 @@ jobs:
     steps:
       - name: Install build tools
         run: |
+          # Keep the glibc 2.31 baseline after Bullseye's repositories were
+          # archived. Archived metadata has a fixed expiry; signatures remain
+          # required, while freshness checks are disabled only for these sources.
+          cat > /etc/apt/sources.list <<'EOF'
+          deb [check-valid-until=no] http://archive.debian.org/debian bullseye main
+          deb [check-valid-until=no] http://archive.debian.org/debian-security bullseye-security main
+          EOF
           dpkg --add-architecture i386
           apt-get update
           apt-get install --yes \
