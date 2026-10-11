@@ -7,7 +7,7 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-10-11
+## [0.7.1] - 2026-10-11
 
 ### Added
 
@@ -28,6 +28,16 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Removed the website's unused ChatGPT authentication starter and its
   documentation.
+
+### Fixed
+
+- Restored the 32-bit Linux release build using Debian's archived Bullseye
+  repositories while retaining its glibc 2.31 compatibility baseline.
+
+## [0.7.0] - 2026-10-11
+
+- Not published: the release build failed while downloading Debian 11 build
+  dependencies. The authentication feature is included in 0.7.1.
 
 ## [0.6.0] - 2026-09-02
 
@@ -249,7 +259,8 @@ and Termleaf uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Made forward Delete work for characters and line boundaries.
 - Made Save As reliable through `F12`, including a Markdown default extension.
 
-[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/andy5090/termleaf/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/andy5090/termleaf/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/andy5090/termleaf/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/andy5090/termleaf/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/andy5090/termleaf/compare/v0.5.0...v0.5.1
