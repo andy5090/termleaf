@@ -150,7 +150,7 @@ sudo apt-get update
 sudo apt-get install --yes pkg-config libasound2-dev libasound2-plugins
 ```
 
-Then build Termleaf:
+Then build Termleaf with Rust 1.89 or newer:
 
 ```bash
 git clone https://github.com/andy5090/termleaf.git
@@ -161,6 +161,50 @@ cargo install --path . --locked
 Other Linux distributions need their equivalent ALSA development package and,
 when the desktop audio server is PulseAudio or PipeWire, the corresponding ALSA
 plugin.
+
+## Cloud account login
+
+Local writing works without an account. To sign in to Termleaf Cloud with Google:
+
+```bash
+termleaf login
+termleaf whoami
+termleaf logout
+```
+
+Login opens a browser and prints a six-digit confirmation code. Sign in with
+Google, then enter that code on the Termleaf device approval page. The terminal
+waits up to five minutes for approval. In an interactive terminal, `Ctrl+C` or
+`Esc` cancels the request; cancellation waits for any in-flight network request
+to finish. Server cancellation is best effort when the connection is unavailable.
+
+For SSH or a terminal without a browser, print the URL and open it on another
+device. You can also name the terminal so it is recognizable in your account:
+
+```bash
+termleaf login --no-browser --device-name "My writing terminal"
+```
+
+Authentication uses `https://api.termleaf.com`. The session is stored separately
+from editor settings at `${XDG_CONFIG_HOME:-~/.config}/termleaf/auth/session.json`
+on macOS, Linux and Termux, or `%LOCALAPPDATA%/termleaf/auth/session.json` on Windows.
+The token is stored with access restricted to your user account; it is not
+encrypted. Unix directories and files use permissions `0700` and `0600`; Windows
+uses a private ACL and requires PowerShell. Authentication also requires `curl`.
+Expired sessions require signing in again.
+
+`whoami` checks your account and subscription on the server. `logout` revokes the
+server session before removing the local copy. If the server cannot be reached,
+`termleaf logout --local` removes only the local copy; the server session remains
+valid until it expires or is revoked from your account.
+
+For local service development, set `TERMLEAF_CLOUD_URL=http://localhost:8787`.
+Custom production origins require HTTPS; redirects are rejected and a saved
+session can only be used with its original service. To open a document named
+`login`, `logout` or `whoami`, use `termleaf -- login` (or the matching name).
+
+These commands authenticate the terminal only. Cloud upload/download and
+automatic synchronization are not yet available in the terminal editor.
 
 ## Keybindings
 
